@@ -1,0 +1,49 @@
+2022-09-22 19:23:04,181 INFO o.a.j.u.JMeterUtils: Setting Locale to en_EN
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: Loading user properties from: user.properties
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: Loading system properties from: system.properties
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: Copyright (c) 1998-2022 The Apache Software Foundation
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: Version 5.5
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: java.version=1.8.0_341
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: java.vm.name=Java HotSpot(TM) Client VM
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: os.name=Windows 10
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: os.arch=x86
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: os.version=10.0
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: file.encoding=Cp1252
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: java.awt.headless=null
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: Max memory     =1073741824
+2022-09-22 19:23:04,196 INFO o.a.j.JMeter: Available Processors =4
+2022-09-22 19:23:04,212 INFO o.a.j.JMeter: Default Locale=English (EN)
+2022-09-22 19:23:04,212 INFO o.a.j.JMeter: JMeter  Locale=English (EN)
+2022-09-22 19:23:04,212 INFO o.a.j.JMeter: JMeterHome=C:\Users\jodamu\Downloads\apache-jmeter-5.5\apache-jmeter-5.5
+2022-09-22 19:23:04,212 INFO o.a.j.JMeter: user.dir  =C:\Users\jodamu\Downloads\apache-jmeter-5.5\apache-jmeter-5.5\bin
+2022-09-22 19:23:04,212 INFO o.a.j.JMeter: PWD       =C:\Users\jodamu\Downloads\apache-jmeter-5.5\apache-jmeter-5.5\bin
+2022-09-22 19:23:04,212 INFO o.a.j.JMeter: IP: 192.168.20.20 Name: JODAMU-PC FullName: JODAMU-PC
+2022-09-22 19:23:04,228 INFO o.a.j.JMeter: Loaded icon properties from org/apache/jmeter/images/icon.properties
+2022-09-22 19:23:04,415 INFO o.a.j.JMeterGuiLauncher: Setting LAF to: com.github.weisj.darklaf.DarkLaf:com.github.weisj.darklaf.theme.DarculaTheme
+2022-09-22 19:23:07,300 INFO o.j.r.JARSourceHTTP: Found cached repo
+2022-09-22 19:23:07,626 INFO o.j.r.PluginManager: Plugins Status: [bzm-rte=3.2.1, jpgc-plugins-manager=1.7, jmeter-core=5.5, jmeter-ftp=5.5, jmeter-http=5.5, jmeter-jdbc=5.5, jmeter-jms=5.5, jmeter-junit=5.5, jmeter-java=5.5, jmeter-ldap=5.5, jmeter-mail=5.5, jmeter-mongodb=5.5, jmeter-native=5.5, jmeter-tcp=5.5, jmeter-components=5.5]
+2022-09-22 19:23:10,567 WARN o.j.r.h.StatsReporter: Failed to send repo stats
+org.apache.http.conn.ConnectTimeoutException: Connect to jmeter-plugins.org:443 timed out
+	at org.apache.http.conn.ssl.SSLSocketFactory.connectSocket(SSLSocketFactory.java:545) ~[httpclient-4.5.13.jar:4.5.13]
+	at org.apache.http.conn.ssl.SSLSocketFactory.connectSocket(SSLSocketFactory.java:415) ~[httpclient-4.5.13.jar:4.5.13]
+	at org.apache.http.impl.conn.DefaultClientConnectionOperator.openConnection(DefaultClientConnectionOperator.java:180) ~[httpclient-4.5.13.jar:4.5.13]
+	at org.apache.http.impl.conn.ManagedClientConnectionImpl.open(ManagedClientConnectionImpl.java:326) ~[httpclient-4.5.13.jar:4.5.13]
+	at org.apache.http.impl.client.DefaultRequestDirector.tryConnect(DefaultRequestDirector.java:605) ~[httpclient-4.5.13.jar:4.5.13]
+	at org.apache.http.impl.client.DefaultRequestDirector.execute(DefaultRequestDirector.java:440) ~[httpclient-4.5.13.jar:4.5.13]
+	at org.apache.http.impl.client.AbstractHttpClient.doExecute(AbstractHttpClient.java:835) ~[httpclient-4.5.13.jar:4.5.13]
+	at org.apache.http.impl.client.CloseableHttpClient.execute(CloseableHttpClient.java:83) ~[httpclient-4.5.13.jar:4.5.13]
+	at org.apache.http.impl.client.CloseableHttpClient.execute(CloseableHttpClient.java:56) ~[httpclient-4.5.13.jar:4.5.13]
+	at org.jmeterplugins.repository.JARSourceHTTP.execute(JARSourceHTTP.java:499) ~[jmeter-plugins-manager-1.7.jar:?]
+	at org.jmeterplugins.repository.JARSourceHTTP.execute(JARSourceHTTP.java:494) ~[jmeter-plugins-manager-1.7.jar:?]
+	at org.jmeterplugins.repository.JARSourceHTTP.reportStats(JARSourceHTTP.java:451) ~[jmeter-plugins-manager-1.7.jar:?]
+	at org.jmeterplugins.repository.http.StatsReporter.run(StatsReporter.java:24) ~[jmeter-plugins-manager-1.7.jar:?]
+2022-09-22 19:23:33,402 INFO o.a.j.g.a.t.TemplateManager: Reading templates from: C:\Users\jodamu\Downloads\apache-jmeter-5.5\apache-jmeter-5.5\bin\templates\templates.xml
+2022-09-22 19:23:39,876 INFO o.a.j.g.a.Load: Loading file: C:\Users\jodamu\Downloads\apache-jmeter-5.5\apache-jmeter-5.5\bin\templates\RteRecordingTemplate.jmx
+2022-09-22 19:23:40,048 INFO o.a.j.s.SaveService: Testplan (JMX) version: 2.2. Testlog (JTL) version: 2.2
+2022-09-22 19:23:40,063 INFO o.a.j.s.SaveService: Using SaveService properties file encoding UTF-8
+2022-09-22 19:23:40,063 INFO o.a.j.s.SaveService: Using SaveService properties version 5.0
+2022-09-22 19:23:40,063 INFO o.a.j.s.SaveService: Loading file: C:\Users\jodamu\Downloads\apache-jmeter-5.5\apache-jmeter-5.5\bin\templates\RteRecordingTemplate.jmx
+2022-09-22 19:23:40,298 INFO o.a.j.s.SampleResult: Note: Sample TimeStamps are START times
+2022-09-22 19:23:40,298 INFO o.a.j.s.SampleResult: sampleresult.default.encoding is set to ISO-8859-1
+2022-09-22 19:23:40,298 INFO o.a.j.s.SampleResult: sampleresult.useNanoTime=true
+2022-09-22 19:23:40,298 INFO o.a.j.s.SampleResult: sampleresult.nanoThreadSleep=5000
