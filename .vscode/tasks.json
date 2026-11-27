@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Validar cambios Fase 8",
+			"type": "process",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"git --no-pager diff --check & git --no-pager status --short & where php & where node"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

@@ -6,7 +6,7 @@ $debtQuery = http_build_query(['space' => $spaceKey]);
 <section class="welcome">
   <p class="eyebrow">Fase 6 · Simulación</p>
   <h1>Plan de pago de deudas</h1>
-  <p class="muted">Prueba un pago mensual para estimar cuánto tardarías y cuánto interés aproximado pagarías. No se guarda ni registra ningún pago. El cálculo supone pagos al final de cada mes y tasa anual dividida entre 12; confirma condiciones con tu entidad.</p>
+  <p class="muted">Prueba un pago mensual para estimar cuánto tardarías y cuánto interés aproximado pagarías. Este valor de simulación no se guarda ni registra; puedes guardar una cuota objetivo en Deudas para dar seguimiento a los pagos reales que ya registraste. El cálculo supone pagos al final de cada mes y tasa anual dividida entre 12; confirma condiciones con tu entidad.</p>
 </section>
 
 <section class="panel">

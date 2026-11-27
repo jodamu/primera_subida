@@ -6,10 +6,10 @@
   <form method="post" action="/login" class="form-stack">
     <input type="hidden" name="_csrf" value="<?= e(\App\Security\Csrf::token()) ?>">
     <label>Correo electrónico
-      <input type="email" name="email" autocomplete="email" maxlength="254" value="jodamu90@gmail.com" required>
+      <input type="email" name="email" autocomplete="email" maxlength="254" required>
     </label>
     <label>Contraseña
-      <input type="password" name="password" autocomplete="current-password" maxlength="4096" value="Adxufl61h" required>
+      <input type="password" name="password" autocomplete="current-password" maxlength="4096" required>
     </label>
     <button class="button button-primary button-wide" type="submit">Entrar</button>
   </form>

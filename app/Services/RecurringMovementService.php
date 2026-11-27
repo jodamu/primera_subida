@@ -77,7 +77,15 @@ final class RecurringMovementService
             throw new DomainException('Selecciona una categoría válida.');
         }
         $categoryMatches = false;
-        foreach ($this->operations->categories() as $category) {
+        foreach ($this->operations->categories($userId) as $category) {
+            if (!\App\Repositories\OperationRepository::categoryFitsSpace(
+                $category,
+                (string) $account['scope'],
+                $account['owner_user_id'] === null ? null : (int) $account['owner_user_id'],
+                $account['household_id'] === null ? null : (int) $account['household_id']
+            )) {
+                continue;
+            }
             if ((int) $category['id'] === (int) $categoryId && $category['kind'] === $type) {
                 $categoryMatches = true;
                 break;

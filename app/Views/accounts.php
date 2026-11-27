@@ -38,7 +38,14 @@
         </select>
       </label>
     <?php endif; ?>
-    <label>Saldo inicial (COP)
+    <label>Moneda
+      <select name="currency" required>
+        <option value="COP">COP · Peso colombiano</option>
+        <option value="USD">USD · Dólar</option>
+        <option value="EUR">EUR · Euro</option>
+      </select>
+    </label>
+    <label>Saldo inicial (en la moneda de la cuenta)
       <input type="number" name="initial_balance" min="0" max="9999999999999.99" step="0.01" value="0.00" required>
     </label>
     <label>Fecha del saldo inicial
@@ -48,7 +55,7 @@
       <input type="checkbox" name="overdraft_enabled" value="1">
       <span><strong>Permitir sobregiro autorizado</strong><small>Úsalo solo si tu entidad realmente permite saldo negativo.</small></span>
     </label>
-    <label>Límite de sobregiro (COP)
+    <label>Límite de sobregiro (moneda de la cuenta)
       <input type="number" name="overdraft_limit" min="0" max="9999999999999.99" step="0.01" value="0.00">
     </label>
     <div class="form-actions form-grid-full">
@@ -69,7 +76,7 @@
             <div><span class="eyebrow"><?= e($account['type_name']) ?> · <?= $account['scope'] === 'household' ? 'Familiar' : 'Personal' ?></span><h3><?= e($account['name']) ?></h3></div>
             <span class="status-pill status-<?= e($account['status']) ?>"><?= $account['status'] === 'active' ? 'Activa' : 'Archivada' ?></span>
           </div>
-          <p class="account-balance"><?= e(\App\Support\DecimalAmount::format((string) $account['current_balance'])) ?> <span>COP</span></p>
+          <p class="account-balance"><?= e(\App\Support\DecimalAmount::format((string) $account['current_balance'])) ?> <span><?= e($account['currency']) ?></span></p>
           <p class="account-detail">Saldo inicial: <?= e(\App\Support\DecimalAmount::format((string) $account['initial_balance'])) ?> · <?= e($account['initial_balance_date']) ?></p>
           <?php if ($account['overdraft_enabled']): ?>
             <p class="account-detail">Sobregiro autorizado: <?= e(\App\Support\DecimalAmount::format((string) $account['overdraft_limit'])) ?></p>

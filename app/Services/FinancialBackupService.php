@@ -32,9 +32,10 @@ final class FinancialBackupService
 
     private function buildForUser(int $userId): array
     {
+        $userHouseholds = $this->households->forUser($userId);
         $householdIds = array_map(
             static fn (array $household): int => (int) $household['id'],
-            $this->households->forUser($userId)
+            $userHouseholds
         );
         [$personalAndHousehold, $scopeParams] = $this->scopeCondition('record', $userId, $householdIds);
         [$accountScope, $accountParams] = $this->scopeCondition('account', $userId, $householdIds);
@@ -44,12 +45,31 @@ final class FinancialBackupService
         [$scheduleScope, $scheduleParams] = $this->scopeCondition('schedule', $userId, $householdIds);
 
         return [
-            'format_version' => 1,
+            'format_version' => 2,
+            'source_origin_id' => $this->originId(),
             'generated_at' => gmdate('c'),
             'note' => 'Incluye los datos personales y los hogares a los que tienes acceso. No incluye contraseñas, tokens ni secretos de configuración.',
+            'financial_spaces' => array_merge(
+                [['scope' => 'personal', 'source_id' => null, 'name' => 'Personal']],
+                array_map(
+                    static fn (array $household): array => [
+                        'scope' => 'household',
+                        'source_id' => (int) $household['id'],
+                        'name' => (string) $household['name'],
+                    ],
+                    $userHouseholds
+                )
+            ),
             'data' => [
                 'account_types' => $this->rows('SELECT id, code, name, sort_order, is_active FROM account_types ORDER BY id'),
-                'categories' => $this->rows('SELECT id, code, name, kind, sort_order, is_active FROM categories ORDER BY id'),
+                'categories' => $this->rows(
+                    'SELECT record.id, record.code, record.name, record.kind, record.scope,
+                            record.owner_user_id, record.household_id, record.sort_order, record.is_active
+                     FROM categories record
+                     WHERE record.scope IS NULL OR (' . $personalAndHousehold . ')
+                     ORDER BY record.id',
+                    $scopeParams
+                ),
                 'accounts' => $this->rows(
                     'SELECT record.id, record.account_type_id, record.name, record.scope,
                             record.owner_user_id, record.household_id, record.created_by,
@@ -93,6 +113,7 @@ final class FinancialBackupService
                             record.owner_user_id, record.household_id, record.created_by,
                             record.initial_balance, record.initial_balance_date, record.credit_limit,
                             record.statement_close_day, record.payment_due_day, record.annual_interest_rate,
+                            record.planned_monthly_payment,
                             record.currency, record.status, record.created_at, record.archived_at
                      FROM liabilities record
                      WHERE ' . $personalAndHousehold . '
@@ -193,5 +214,23 @@ final class FinancialBackupService
         $statement->execute($params);
 
         return $statement->fetchAll();
+    }
+
+    private function originId(): string
+    {
+        $statement = $this->db->prepare(
+            'INSERT INTO financial_backup_origin (origin_key, origin_id)
+             VALUES (1, :origin_id)
+             ON DUPLICATE KEY UPDATE origin_id = origin_id'
+        );
+        $statement->execute(['origin_id' => bin2hex(random_bytes(16))]);
+        $originId = $this->db->query(
+            'SELECT origin_id FROM financial_backup_origin WHERE origin_key = 1'
+        )->fetchColumn();
+        if (!is_string($originId) || !preg_match('/\A[a-f0-9]{32}\z/', $originId)) {
+            throw new \RuntimeException('No fue posible obtener el identificador de origen del respaldo.');
+        }
+
+        return $originId;
     }
 }

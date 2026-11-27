@@ -110,9 +110,125 @@ final class ReminderService
                     );
                 }
             }
+
+            $baseUrl = rtrim((string) app_config('APP_URL', 'https://finanzas.jodamuover.com'), '/');
+            $todayDate = $today->format('Y-m-d');
+
+            foreach ($this->dueLiabilities($space, $today, (int) $settings['reminder_days_before']) as $due) {
+                $body = sprintf(
+                    "La deuda \"%s\" vence el %s.\n\nRevisa el detalle en %s/liabilities?space=%s",
+                    $due['name'],
+                    $due['due_date'],
+                    $baseUrl,
+                    rawurlencode($spaceQuery)
+                );
+                foreach ($recipients as $recipient) {
+                    $sent += $this->sendSafely($space, $recipient, 'liability_due', (int) $due['id'], $due['due_date'], 'Vencimiento de deuda: ' . $due['name'], $body, $failed);
+                }
+            }
+
+            foreach ($this->dueRecurring($space, $todayDate, $lastReminderDate) as $due) {
+                $body = sprintf(
+                    "El movimiento recurrente \"%s\" vence el %s.\n\nRevisa el detalle en %s/recurring?space=%s",
+                    $due['description'],
+                    $due['next_due_date'],
+                    $baseUrl,
+                    rawurlencode($spaceQuery)
+                );
+                foreach ($recipients as $recipient) {
+                    $sent += $this->sendSafely($space, $recipient, 'recurring_due', (int) $due['id'], (string) $due['next_due_date'], 'Movimiento recurrente próximo: ' . $due['description'], $body, $failed);
+                }
+            }
+
+            $weekStart = $today->modify('monday this week');
+            $summary = $this->weeklyTotals($space, $weekStart->modify('-7 days')->format('Y-m-d'), $weekStart->modify('-1 day')->format('Y-m-d'));
+            $body = sprintf(
+                "Resumen de la semana del %s al %s (solo cuentas en COP).\n\nIngresos: %s COP\nGastos: %s COP\n\nDetalle en %s/?household_id=%s",
+                $weekStart->modify('-7 days')->format('Y-m-d'),
+                $weekStart->modify('-1 day')->format('Y-m-d'),
+                $summary['income'],
+                $summary['expense'],
+                $baseUrl,
+                rawurlencode($space['scope'] === 'household' ? (string) $space['household_id'] : 'personal')
+            );
+            foreach ($recipients as $recipient) {
+                $sent += $this->sendSafely($space, $recipient, 'weekly_summary', 0, $weekStart->format('Y-m-d'), 'Tu resumen semanal de finanzas', $body, $failed);
+            }
         }
 
         return ['sent' => $sent, 'failed' => $failed];
+    }
+
+    private function spaceWhere(array $space, string $alias): array
+    {
+        if ($space['scope'] === 'personal') {
+            return [$alias . '.scope = "personal" AND ' . $alias . '.owner_user_id = :space_id', (int) $space['owner_user_id']];
+        }
+
+        return [$alias . '.scope = "household" AND ' . $alias . '.household_id = :space_id', (int) $space['household_id']];
+    }
+
+    private function dueLiabilities(array $space, DateTimeImmutable $today, int $daysBefore): array
+    {
+        [$where, $id] = $this->spaceWhere($space, 'l');
+        $statement = $this->db->prepare(
+            'SELECT l.id, l.name, l.payment_due_day FROM liabilities l
+             WHERE ' . $where . ' AND l.status = "active" AND l.payment_due_day IS NOT NULL'
+        );
+        $statement->execute(['space_id' => $id]);
+        $limit = $today->modify('+' . $daysBefore . ' days');
+        $result = [];
+        foreach ($statement->fetchAll() as $row) {
+            $day = min((int) $row['payment_due_day'], 28);
+            $due = $today->setDate((int) $today->format('Y'), (int) $today->format('n'), $day);
+            if ($due < $today) {
+                $due = $due->modify('first day of next month')->setDate(
+                    (int) $due->modify('first day of next month')->format('Y'),
+                    (int) $due->modify('first day of next month')->format('n'),
+                    $day
+                );
+            }
+            if ($due <= $limit) {
+                $result[] = ['id' => $row['id'], 'name' => $row['name'], 'due_date' => $due->format('Y-m-d')];
+            }
+        }
+
+        return $result;
+    }
+
+    private function dueRecurring(array $space, string $from, string $to): array
+    {
+        [$where, $id] = $this->spaceWhere($space, 'r');
+        $statement = $this->db->prepare(
+            'SELECT r.id, r.description, r.next_due_date FROM recurring_movements r
+             WHERE ' . $where . ' AND r.status = "active" AND r.next_due_date BETWEEN :from_date AND :to_date'
+        );
+        $statement->execute(['space_id' => $id, 'from_date' => $from, 'to_date' => $to]);
+
+        return $statement->fetchAll();
+    }
+
+    private function weeklyTotals(array $space, string $from, string $to): array
+    {
+        [$where, $id] = $this->spaceWhere($space, 'o');
+        $statement = $this->db->prepare(
+            'SELECT o.operation_type,
+                    CAST(COALESCE(SUM(m.amount), 0) AS CHAR) AS total
+             FROM operations o
+             INNER JOIN movements m ON m.operation_id = o.id
+             INNER JOIN accounts a ON a.id = m.account_id AND a.currency = "COP"
+             WHERE ' . $where . ' AND o.status = "confirmed"
+               AND o.operation_type IN ("income", "expense")
+               AND o.effective_date BETWEEN :from_date AND :to_date
+             GROUP BY o.operation_type'
+        );
+        $statement->execute(['space_id' => $id, 'from_date' => $from, 'to_date' => $to]);
+        $totals = ['income' => '0.00', 'expense' => '0.00'];
+        foreach ($statement->fetchAll() as $row) {
+            $totals[$row['operation_type']] = (string) $row['total'];
+        }
+
+        return $totals;
     }
 
     private function recipients(array $space): array

@@ -39,7 +39,7 @@ final class FinancialPlanningService
             'period_end' => $end,
             'alert_percent' => (int) $configuration['settings']['budget_alert_percent'],
             'budgets' => $this->planning->budgetsForSpace($configuration['space'], $start, $end),
-            'categories' => $this->planning->expenseCategories(),
+            'categories' => $this->planning->expenseCategories($configuration['space']),
         ];
     }
 
@@ -51,7 +51,7 @@ final class FinancialPlanningService
             throw new DomainException('Selecciona una categoría de gasto válida.');
         }
         $category = null;
-        foreach ($this->planning->expenseCategories() as $candidate) {
+        foreach ($this->planning->expenseCategories($space) as $candidate) {
             if ((int) $candidate['id'] === (int) $categoryId) {
                 $category = $candidate;
                 break;

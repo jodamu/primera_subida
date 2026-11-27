@@ -95,6 +95,39 @@
             <p class="account-detail">Tasa anual de referencia: <?= e($liability['annual_interest_rate']) ?>%</p>
           <?php endif; ?>
           <p class="account-detail">Saldo inicial: <?= e(\App\Support\DecimalAmount::format((string) $liability['initial_balance'])) ?> · <?= e($liability['initial_balance_date']) ?></p>
+          <?php if ($liability['planned_monthly_payment'] !== null): ?>
+            <?php
+            $targetCents = (int) str_replace('.', '', $liability['planned_monthly_payment']);
+            $paidCents = (int) str_replace('.', '', $liability['current_month_paid']);
+            $progressPercent = $targetCents > 0
+                ? max(0, min(100, (int) floor($paidCents * 100 / $targetCents)))
+                : 0;
+            ?>
+            <p class="account-detail">
+              Pagado este mes: <?= e(\App\Support\DecimalAmount::format((string) $liability['current_month_paid'])) ?>
+              de <?= e(\App\Support\DecimalAmount::format((string) $liability['planned_monthly_payment'])) ?> objetivo
+            </p>
+            <progress max="100" value="<?= $progressPercent ?>" aria-label="Avance de cuota objetivo"><?= $progressPercent ?>%</progress>
+          <?php endif; ?>
+          <?php if ($liability['status'] === 'active' && $liability['can_manage']): ?>
+            <form method="post" action="/liabilities/payment-target" class="form-grid">
+              <input type="hidden" name="_csrf" value="<?= e(\App\Security\Csrf::token()) ?>">
+              <input type="hidden" name="liability_id" value="<?= (int) $liability['id'] ?>">
+              <label>Cuota objetivo mensual (COP)
+                <input
+                  type="number"
+                  name="planned_monthly_payment"
+                  min="0.01"
+                  max="9999999999999.99"
+                  step="0.01"
+                  value="<?= $liability['planned_monthly_payment'] === null ? '' : e($liability['planned_monthly_payment']) ?>"
+                  placeholder="Opcional"
+                >
+              </label>
+              <div class="form-actions"><button class="button button-secondary" type="submit">Guardar cuota objetivo</button></div>
+              <p class="field-help">Solo sirve para seguimiento. No programa ni registra pagos.</p>
+            </form>
+          <?php endif; ?>
           <?php if ($liability['status'] === 'active' && $liability['can_manage']): ?>
             <form method="post" action="/liabilities/archive" data-confirm="¿Archivar esta deuda? Solo se permite si su saldo está en cero.">
               <input type="hidden" name="_csrf" value="<?= e(\App\Security\Csrf::token()) ?>">

@@ -20,7 +20,9 @@ final class LiabilityRepository
             'SELECT l.id, l.kind, l.name, l.creditor, l.scope, l.owner_user_id, l.household_id,
                     l.initial_balance, l.initial_balance_date, l.credit_limit,
                     l.statement_close_day, l.payment_due_day, l.annual_interest_rate,
+                    l.planned_monthly_payment,
                     l.currency, l.status, l.archived_at,
+                    CAST(COALESCE(monthly_payments.amount, 0.00) AS CHAR) AS current_month_paid,
                     CAST(
                         CAST(l.initial_balance AS DECIMAL(15,2))
                         + COALESCE(b.balance_delta, 0.00)
@@ -49,6 +51,26 @@ final class LiabilityRepository
                 FROM liability_movements
                 GROUP BY liability_id
              ) b ON b.liability_id = l.id
+             LEFT JOIN (
+                SELECT lm.liability_id,
+                       CAST(SUM(
+                           CASE
+                               WHEN o.operation_type = "liability_payment" AND lm.direction = "decrease"
+                                   THEN lm.amount + lm.interest_amount
+                               WHEN o.operation_type = "reversal"
+                                   AND original.operation_type = "liability_payment"
+                                   AND lm.direction = "increase"
+                                   THEN (lm.amount + lm.interest_amount) * -1
+                               ELSE 0.00
+                           END
+                       ) AS DECIMAL(15,2)) AS amount
+                FROM liability_movements lm
+                INNER JOIN operations o ON o.id = lm.operation_id
+                LEFT JOIN operations original ON original.id = o.reversal_of_operation_id
+                WHERE o.confirmed_at IS NOT NULL
+                  AND o.effective_date BETWEEN :month_start AND :month_end
+                GROUP BY lm.liability_id
+             ) monthly_payments ON monthly_payments.liability_id = l.id
              WHERE (
                 (l.scope = "personal" AND l.owner_user_id = :owner_user_id)
                 OR
@@ -67,6 +89,8 @@ final class LiabilityRepository
             'member_user_id' => $userId,
             'manager_owner_id' => $userId,
             'manager_member_user_id' => $userId,
+            'month_start' => date('Y-m-01'),
+            'month_end' => date('Y-m-t'),
         ]);
 
         return $statement->fetchAll();
@@ -143,6 +167,18 @@ final class LiabilityRepository
              WHERE id = :id AND status = "active"'
         );
         $statement->execute(['id' => $liabilityId]);
+    }
+
+    public function setPlannedMonthlyPayment(int $liabilityId, ?string $amount): void
+    {
+        $statement = $this->db->prepare(
+            'UPDATE liabilities
+             SET planned_monthly_payment = :amount
+             WHERE id = :id AND status = "active"'
+        );
+        $statement->bindValue(':amount', $amount, $amount === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $statement->bindValue(':id', $liabilityId, PDO::PARAM_INT);
+        $statement->execute();
     }
 
     private function bindValues(PDOStatement $statement, array $data): void

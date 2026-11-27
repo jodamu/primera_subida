@@ -17,9 +17,14 @@ use App\Repositories\RecurringMovementRepository;
 use App\Services\AuthService;
 use App\Services\AccountActionService;
 use App\Services\AccountService;
+use App\Services\AttachmentService;
 use App\Services\CashFlowProjectionService;
+use App\Services\CategoryService;
+use App\Services\CurrencyService;
+use App\Services\DemoDataService;
 use App\Services\DebtPlanService;
 use App\Services\FinancialBackupService;
+use App\Services\BackupRestoreService;
 use App\Services\FinancialAlertService;
 use App\Services\HouseholdService;
 use App\Services\FinancialSettingsService;
@@ -30,6 +35,7 @@ use App\Services\LiabilityService;
 use App\Services\MailService;
 use App\Services\OperationService;
 use App\Services\RecurringMovementService;
+use App\Services\ReconciliationService;
 use App\Services\ReportService;
 use App\Repositories\UserRepository;
 
@@ -41,7 +47,7 @@ $cspNonce = base64_encode(random_bytes(18));
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: strict-origin-when-cross-origin');
-header('Content-Security-Policy: default-src \'self\'; base-uri \'self\'; form-action \'self\'; frame-ancestors \'none\'; object-src \'none\'; script-src \'self\' \'nonce-' . $cspNonce . '\'; style-src \'self\'; img-src \'self\' data:');
+header('Content-Security-Policy: default-src \'self\'; base-uri \'self\'; form-action \'self\'; frame-ancestors \'none\'; object-src \'none\'; script-src \'self\' https://cdn.jsdelivr.net \'nonce-' . $cspNonce . '\'; style-src \'self\' https://cdn.jsdelivr.net; font-src \'self\' https://cdn.jsdelivr.net data:; img-src \'self\' data:');
 header('Cache-Control: no-store, private');
 if (Session::isHttps()) {
     header('Strict-Transport-Security: max-age=31536000');
@@ -134,6 +140,7 @@ try {
     $accountActions = new AccountActionService($db, $users, new MailService());
     $households = new HouseholdService($db);
     $financialSpaces = new FinancialSpaceService($households);
+    $categoryService = new CategoryService($db, $financialSpaces);
     $financialSettingsRepository = new FinancialSettingsRepository($db);
     $financialSettings = new FinancialSettingsService(
         $financialSpaces,
@@ -150,6 +157,8 @@ try {
     $liabilityRepository = new LiabilityRepository($db);
     $operationRepository = new OperationRepository($db);
     $accountService = new AccountService($db, $accountRepository);
+    $currencyService = new CurrencyService($db, $accountService, $financialSpaces);
+    $attachmentService = new AttachmentService($db, __DIR__ . '/storage/attachments');
     $operationService = new OperationService($db, $accountRepository, $operationRepository, $liabilityRepository);
     $liabilityService = new LiabilityService($db, $accountRepository, $liabilityRepository, $operationRepository);
     $reportService = new ReportService($db, $households);
@@ -161,6 +170,18 @@ try {
         $financialSpaces
     );
     $backupService = new FinancialBackupService($db, $households);
+    $demoDataService = new DemoDataService(
+        $db,
+        $accountService,
+        $operationService,
+        $liabilityService,
+        $financialPlanning,
+        $categoryService,
+        $currencyService,
+        $recurringService,
+        __DIR__ . '/storage/attachments'
+    );
+    $backupRestoreService = new BackupRestoreService($db, $households);
     $projectionService = new CashFlowProjectionService(
         $accountService,
         $recurringRepository,
@@ -181,6 +202,7 @@ try {
         new CsvImportRepository($db),
         $operationService
     );
+    $reconciliationService = new ReconciliationService($db, $accountRepository);
 
     if (!empty($_SESSION['user']['id'])) {
         $freshUser = $users->findById((int) $_SESSION['user']['id']);
@@ -556,7 +578,7 @@ try {
             'liabilities' => $liabilityService->listForUser($userId),
             'activeLiabilities' => $liabilityService->listForUser($userId, true),
             'activeAccounts' => $accountService->listForUser($userId, true),
-            'categories' => $operationService->categories(),
+            'categories' => $operationService->categories($userId),
             'manageableHouseholds' => $manageableHouseholds,
             'chargeKey' => bin2hex(random_bytes(32)),
             'paymentKey' => bin2hex(random_bytes(32)),
@@ -611,6 +633,22 @@ try {
             }
             $liabilityService->archive($userId, (int) $liabilityId);
             $_SESSION['flash'] = ['type' => 'success', 'message' => 'La deuda fue archivada; su historial se conserva.'];
+        } catch (DomainException $exception) {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => $exception->getMessage()];
+        }
+        redirect('/liabilities');
+    }
+
+    if ($path === '/liabilities/payment-target' && $method === 'POST') {
+        require_csrf();
+        $userId = authenticated_user_id();
+        try {
+            $liabilityService->setPlannedMonthlyPayment(
+                $userId,
+                $_POST['liability_id'] ?? null,
+                $_POST['planned_monthly_payment'] ?? null
+            );
+            $_SESSION['flash'] = ['type' => 'success', 'message' => 'La cuota objetivo quedó actualizada.'];
         } catch (DomainException $exception) {
             $_SESSION['flash'] = ['type' => 'error', 'message' => $exception->getMessage()];
         }
@@ -744,6 +782,71 @@ try {
         exit;
     }
 
+    if ($path === '/trends' && $method === 'GET') {
+        $userId = authenticated_user_id();
+        try {
+            $trends = $reportService->trends($userId, $_GET['household_id'] ?? 'personal');
+            render_page('trends', [
+                'title' => 'Tendencias financieras',
+                'trends' => $trends,
+                'households' => $reportService->spacesForUser($userId),
+            ]);
+        } catch (DomainException $exception) {
+            http_response_code(422);
+            render_page('error', ['title' => 'No se pudieron cargar las tendencias', 'message' => $exception->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($path === '/reconciliation' && $method === 'GET') {
+        $userId = authenticated_user_id();
+        $preview = null;
+        try {
+            if (isset($_GET['batch'])) {
+                $preview = $reconciliationService->previewForUser($userId, $_GET['batch']);
+            }
+            render_page('reconciliation', [
+                'title' => 'Conciliar extracto bancario',
+                'accounts' => $reconciliationService->accountsForUser($userId),
+                'recentBatches' => $reconciliationService->recentForUser($userId),
+                'preview' => $preview,
+            ]);
+        } catch (DomainException $exception) {
+            http_response_code(422);
+            render_page('error', ['title' => 'Conciliación no disponible', 'message' => $exception->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($path === '/reconciliation/preview' && $method === 'POST') {
+        require_csrf();
+        $userId = authenticated_user_id();
+        try {
+            $batchId = $reconciliationService->createPreview($userId, $_POST, $_FILES['csv_file'] ?? null);
+            redirect('/reconciliation?batch=' . $batchId);
+        } catch (DomainException $exception) {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => $exception->getMessage()];
+            redirect('/reconciliation');
+        }
+    }
+
+    if ($path === '/reconciliation/confirm' && $method === 'POST') {
+        require_csrf();
+        $userId = authenticated_user_id();
+        $batchId = $_POST['batch_id'] ?? null;
+        try {
+            $result = $reconciliationService->confirm($userId, $batchId, $_POST['decisions'] ?? []);
+            $_SESSION['flash'] = [
+                'type' => 'success',
+                'message' => $result['matched'] . ' coincidencias confirmadas. El libro contable no fue modificado.',
+            ];
+        } catch (DomainException $exception) {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => $exception->getMessage()];
+        }
+        $redirectBatch = filter_var($batchId, FILTER_VALIDATE_INT);
+        redirect('/reconciliation' . ($redirectBatch && $redirectBatch > 0 ? '?batch=' . $redirectBatch : ''));
+    }
+
     if ($path === '/exports/backup' && $method === 'GET') {
         $userId = authenticated_user_id();
         $backup = $backupService->forUser($userId);
@@ -757,13 +860,74 @@ try {
         exit;
     }
 
+    if ($path === '/backups/restore' && $method === 'GET') {
+        $userId = authenticated_user_id();
+        $preview = null;
+        try {
+            if (isset($_GET['batch'])) {
+                $preview = $backupRestoreService->previewForUser($userId, $_GET['batch']);
+            }
+            $manageableHouseholds = array_values(array_filter(
+                $households->forUser($userId),
+                static fn (array $household): bool => in_array($household['role'], ['owner', 'admin'], true)
+            ));
+            render_page('backup-restore', [
+                'title' => 'Restaurar respaldo',
+                'preview' => $preview,
+                'recentBatches' => $backupRestoreService->recentForUser($userId),
+                'manageableHouseholds' => $manageableHouseholds,
+            ]);
+        } catch (DomainException $exception) {
+            http_response_code(422);
+            render_page('error', ['title' => 'Respaldo no disponible', 'message' => $exception->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($path === '/backups/restore/preview' && $method === 'POST') {
+        require_csrf();
+        $userId = authenticated_user_id();
+        try {
+            $batchId = $backupRestoreService->createPreview($userId, $_FILES['backup_file'] ?? null);
+            redirect('/backups/restore?batch=' . $batchId);
+        } catch (DomainException $exception) {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => $exception->getMessage()];
+            redirect('/backups/restore');
+        }
+    }
+
+    if ($path === '/backups/restore/confirm' && $method === 'POST') {
+        require_csrf();
+        $userId = authenticated_user_id();
+        $batchId = $_POST['batch_id'] ?? null;
+        try {
+            $counts = $backupRestoreService->restore(
+                $userId,
+                $batchId,
+                $_POST['household_map'] ?? []
+            );
+            $added = array_sum(array_map(
+                static fn (array $result): int => (int) $result['added'],
+                $counts
+            ));
+            $_SESSION['flash'] = [
+                'type' => 'success',
+                'message' => 'Respaldo integrado. Se añadieron ' . $added . ' registros; no se borró ni reemplazó información.',
+            ];
+        } catch (DomainException $exception) {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => $exception->getMessage()];
+        }
+        $redirectBatch = filter_var($batchId, FILTER_VALIDATE_INT);
+        redirect('/backups/restore' . ($redirectBatch && $redirectBatch > 0 ? '?batch=' . $redirectBatch : ''));
+    }
+
     if ($path === '/recurring' && $method === 'GET') {
         $userId = authenticated_user_id();
         render_page('recurring', [
             'title' => 'Movimientos recurrentes',
             'schedules' => $recurringService->listForUser($userId),
             'activeAccounts' => $accountService->listForUser($userId, true),
-            'categories' => $operationService->categories(),
+            'categories' => $operationService->categories($userId),
         ]);
         exit;
     }
@@ -818,7 +982,7 @@ try {
         render_page('transactions', [
             'title' => 'Movimientos',
             'activeAccounts' => $accountService->listForUser($userId, true),
-            'categories' => $operationService->categories(),
+            'categories' => $operationService->categories($userId),
             'recentOperations' => $operationService->recentForUser($userId),
             'singleIdempotencyKey' => bin2hex(random_bytes(32)),
             'transferIdempotencyKey' => bin2hex(random_bytes(32)),
@@ -880,6 +1044,129 @@ try {
             $_SESSION['flash'] = ['type' => 'error', 'message' => $exception->getMessage()];
         }
         redirect('/transactions');
+    }
+
+    if ($path === '/attachments' && $method === 'GET') {
+        $userId = authenticated_user_id();
+        $operationId = (int) filter_var($_GET['operation_id'] ?? 0, FILTER_VALIDATE_INT);
+        try {
+            render_page('attachments', [
+                'title' => 'Adjuntos del movimiento',
+                'operationId' => $operationId,
+                'attachments' => $attachmentService->listForOperation($userId, $operationId),
+            ]);
+        } catch (DomainException $exception) {
+            http_response_code(403);
+            render_page('error', ['title' => 'Adjuntos no disponibles', 'message' => $exception->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($path === '/attachments' && $method === 'POST') {
+        require_csrf();
+        $userId = authenticated_user_id();
+        $operationId = (int) filter_var($_POST['operation_id'] ?? 0, FILTER_VALIDATE_INT);
+        try {
+            $attachmentService->upload($userId, $operationId, $_FILES['attachment'] ?? null);
+            $_SESSION['flash'] = ['type' => 'success', 'message' => 'El adjunto quedó guardado.'];
+        } catch (DomainException $exception) {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => $exception->getMessage()];
+        }
+        redirect('/attachments?operation_id=' . $operationId);
+    }
+
+    if ($path === '/attachments/download' && $method === 'GET') {
+        $userId = authenticated_user_id();
+        try {
+            $file = $attachmentService->forDownload($userId, (int) filter_var($_GET['id'] ?? 0, FILTER_VALIDATE_INT));
+        } catch (DomainException $exception) {
+            http_response_code(404);
+            render_page('error', ['title' => 'Adjunto no disponible', 'message' => $exception->getMessage()]);
+            exit;
+        }
+        $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $file['name']) ?? 'adjunto';
+        header('Content-Type: ' . $file['mime']);
+        header('Content-Length: ' . $file['size']);
+        header('Content-Disposition: attachment; filename="' . $safeName . '"');
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: private, no-store');
+        header("Content-Security-Policy: default-src 'none'; sandbox");
+        readfile($file['path']);
+        exit;
+    }
+
+    if ($path === '/attachments/delete' && $method === 'POST') {
+        require_csrf();
+        $userId = authenticated_user_id();
+        $operationId = 0;
+        try {
+            $operationId = $attachmentService->delete($userId, (int) filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT));
+            $_SESSION['flash'] = ['type' => 'success', 'message' => 'El adjunto fue eliminado.'];
+        } catch (DomainException $exception) {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => $exception->getMessage()];
+        }
+        redirect($operationId > 0 ? '/attachments?operation_id=' . $operationId : '/transactions');
+    }
+
+    if ($path === '/currencies' && $method === 'GET') {
+        $userId = authenticated_user_id();
+        render_page('currencies', [
+            'title' => 'Monedas y tasas',
+            'overview' => $currencyService->ratesOverview($userId),
+        ]);
+        exit;
+    }
+
+    if ($path === '/currencies' && $method === 'POST') {
+        require_csrf();
+        $userId = authenticated_user_id();
+        try {
+            $currencyService->setRate($userId, $_POST);
+            $_SESSION['flash'] = ['type' => 'success', 'message' => 'La tasa manual quedó guardada.'];
+        } catch (DomainException $exception) {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => $exception->getMessage()];
+        }
+        redirect('/currencies');
+    }
+
+    if ($path === '/categories' && $method === 'GET') {
+        $userId = authenticated_user_id();
+        try {
+            render_page('categories', [
+                'title' => 'Categorías',
+                'spaces' => $financialSpaces->listForUser($userId),
+                'data' => $categoryService->listForSpace($userId, $_GET['space'] ?? 'personal'),
+            ]);
+        } catch (DomainException $exception) {
+            http_response_code(422);
+            render_page('error', ['title' => 'Categorías no disponibles', 'message' => $exception->getMessage()]);
+        }
+        exit;
+    }
+
+    $categoryActions = [
+        '/categories' => ['create', 'La categoría quedó creada.'],
+        '/categories/rename' => ['rename', 'La categoría fue renombrada.'],
+        '/categories/archive' => ['archive', 'La categoría fue archivada.'],
+        '/categories/restore' => ['restore', 'La categoría fue restaurada.'],
+    ];
+    if (isset($categoryActions[$path]) && $method === 'POST') {
+        require_csrf();
+        $userId = authenticated_user_id();
+        [$action, $successMessage] = $categoryActions[$path];
+        try {
+            match ($action) {
+                'create' => $categoryService->create($userId, $_POST),
+                'rename' => $categoryService->rename($userId, $_POST),
+                'archive' => $categoryService->setActive($userId, $_POST, false),
+                'restore' => $categoryService->setActive($userId, $_POST, true),
+            };
+            $_SESSION['flash'] = ['type' => 'success', 'message' => $successMessage];
+        } catch (DomainException $exception) {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => $exception->getMessage()];
+        }
+        $spaceKey = $_POST['space'] ?? 'personal';
+        redirect('/categories?space=' . rawurlencode(is_string($spaceKey) ? $spaceKey : 'personal'));
     }
 
     if ($path === '/budgets' && $method === 'GET') {
@@ -985,7 +1272,7 @@ try {
                 exit;
             }
         }
-        $categories = $operationService->categories();
+        $categories = $operationService->categories($userId);
         $categoryNames = [];
         foreach ($categories as $category) {
             $categoryNames[(int) $category['id']] = $category['name'];
@@ -1068,6 +1355,8 @@ try {
                 'settings' => $settingsData['settings'],
                 'canManage' => $settingsData['can_manage'],
                 'timezones' => $timezones,
+                'demoEnabled' => $demoDataService->isEnabled(),
+                'demoHousehold' => $demoDataService->demoHouseholdFor($userId),
             ]);
         } catch (DomainException $exception) {
             http_response_code(422);
@@ -1088,6 +1377,26 @@ try {
         }
         $redirectSpace = is_string($spaceKey) ? $spaceKey : 'personal';
         redirect('/settings?space=' . rawurlencode($redirectSpace));
+    }
+
+    if ($path === '/settings/demo' && $method === 'POST') {
+        require_csrf();
+        $userId = authenticated_user_id();
+        try {
+            if (($_POST['action'] ?? '') === 'delete') {
+                $demoDataService->delete($userId);
+                $_SESSION['flash'] = ['type' => 'success', 'message' => 'El hogar de demostración y todos sus datos fueron eliminados.'];
+            } elseif (($_POST['action'] ?? '') === 'create') {
+                $demoHouseholdId = $demoDataService->create($userId);
+                $_SESSION['flash'] = ['type' => 'success', 'message' => 'Creamos el hogar "Demostración" con datos de ejemplo.'];
+                redirect('/?household_id=' . $demoHouseholdId);
+            } else {
+                throw new DomainException('Selecciona una acción válida para la demostración.');
+            }
+        } catch (DomainException $exception) {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => $exception->getMessage()];
+        }
+        redirect('/settings');
     }
 
     if ($path === '/' && $method === 'GET') {
@@ -1126,6 +1435,11 @@ try {
                 'report' => $report,
                 'activeAccounts' => $activeAccounts,
                 'financialAlerts' => $financialAlerts->forUser($userId),
+                'foreignAccounts' => array_values(array_filter(
+                    $currencyService->foreignAccountsSummary($userId),
+                    static fn (array $account): bool => $account['space_key']
+                        === ($selectedHouseholdId === null ? 'personal' : 'household:' . $selectedHouseholdId)
+                )),
             ]);
         } catch (DomainException $exception) {
             http_response_code(422);

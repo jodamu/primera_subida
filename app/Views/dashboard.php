@@ -117,6 +117,22 @@ $reportQuery = http_build_query([
   <?php endif; ?>
 </section>
 
+<?php if (!empty($foreignAccounts)): ?>
+<section class="panel section-gap">
+  <div class="panel-heading"><div><p class="eyebrow">OTRAS MONEDAS</p><h2>Cuentas en moneda extranjera</h2></div><a href="/currencies">Tasas</a></div>
+  <p class="muted">Equivalente estimado con tasa manual; no se suma a los informes en COP.</p>
+  <div class="account-grid">
+    <?php foreach ($foreignAccounts as $account): ?>
+      <article class="account-card">
+        <div class="account-card-heading"><h3><?= e($account['name']) ?></h3><span class="role"><?= e($account['currency']) ?></span></div>
+        <p class="account-balance"><?= e(\App\Support\DecimalAmount::format((string) $account['current_balance'])) ?> <span><?= e($account['currency']) ?></span></p>
+        <span class="account-detail"><?= $account['estimated_cop'] !== null ? '≈ ' . e(\App\Support\DecimalAmount::format((string) $account['estimated_cop'])) . ' COP (estimado)' : 'Define una tasa para ver el equivalente' ?></span>
+      </article>
+    <?php endforeach; ?>
+  </div>
+</section>
+<?php endif; ?>
+
 <section class="panel section-gap">
   <div class="panel-heading">
     <div><p class="eyebrow">FINANZAS COMPARTIDAS</p><h2>Tus hogares</h2></div>

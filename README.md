@@ -1,6 +1,6 @@
 # Mi Finanzas
 
-Aplicación web en PHP 8.3 y MySQL 8 para organizar finanzas personales y del hogar. Incluye autenticación, hogares, cuentas y movimientos, deudas y tarjetas, informes mensuales, presupuestos, metas de ahorro, importación CSV y recordatorios.
+Aplicación web en PHP 8.3 y MySQL 8 para organizar finanzas personales y del hogar. Incluye autenticación, hogares, cuentas y movimientos, deudas y tarjetas, informes mensuales, presupuestos, metas de ahorro, importación CSV, conciliación manual, tendencias y restauración aditiva de respaldos.
 
 ## Requisitos
 
@@ -131,7 +131,7 @@ php bin/check-install.php
 
 El migrador aplica las migraciones pendientes en orden. Confirma que las fases anteriores aparezcan aplicadas y que `check-install.php` muestre `[OK]` para las fases 3, 4 y 5. Si hay un error, detente y comparte solo el mensaje, sin credenciales ni datos de `.env`; no repitas una migración parcial a ciegas.
 
-El panel de inicio muestra el flujo de caja mensual, gastos por categoría y saldos de cuentas activas, con selector de mes y espacio personal/familiar. Los informes se pueden descargar en CSV compatible con hojas de cálculo o imprimir desde el navegador y guardar como PDF. El respaldo descargable es JSON: incluye tus datos personales y los hogares a los que tienes acceso, pero excluye contraseñas, tokens y secretos de configuración. Guárdalo en un lugar privado; esta versión no restaura automáticamente un respaldo.
+El panel de inicio muestra el flujo de caja mensual, gastos por categoría y saldos de cuentas activas, con selector de mes y espacio personal/familiar. Los informes se pueden descargar en CSV compatible con hojas de cálculo o imprimir desde el navegador y guardar como PDF. El respaldo descargable es JSON: incluye tus datos personales y los hogares a los que tienes acceso, pero excluye contraseñas, tokens y secretos de configuración. Guárdalo en un lugar privado. La restauración aditiva está disponible desde **Planificación → Restaurar respaldo**; permite una vista previa y exige elegir el destino de cada hogar.
 
 Las programaciones recurrentes admiten ingresos y gastos semanales, mensuales o anuales. Al llegar la fecha aparecen como pendientes en `Movimientos recurrentes`; ningún movimiento se agrega a una cuenta ni modifica saldos hasta que pulses **Revisar y confirmar**. No necesitan cron. En meses sin el día programado (por ejemplo, el 31), se usa el último día del mes. Para probar, usa una cuenta y base de pruebas; comprueba el movimiento pendiente antes de confirmarlo y verifica que se registre una sola vez. Pausar una programación no la elimina y su historial confirmado se conserva.
 
@@ -144,6 +144,32 @@ Esta fase no añade migraciones. Requiere que las migraciones 003, 004 y 005 est
 - **Alertas en el inicio**: muestra presupuestos que alcanzaron el umbral configurado, movimientos recurrentes próximos o pendientes, y fechas de pago cercanas de tarjetas activas con saldo. Son avisos internos; no se envían correos nuevos ni se conoce si una factura concreta ya fue pagada.
 
 Prueba estas funciones con una base de pruebas: crea una recurrencia y confirma que la proyección la incluya sin cambiar el saldo; compara una deuda sin interés con pagos hipotéticos y luego con una cuota menor que el interés mensual estimado; revisa alertas de un presupuesto que supere su umbral y una recurrencia vencida. No registres cuotas de prueba en una cuenta real.
+
+## Fase 7: seguimiento de deudas, tendencias y herramientas de datos
+
+Antes de subir esta fase, descarga además un respaldo de la base de datos desde el panel del hosting. Sube los archivos nuevos sin reemplazar `.env` y ejecuta por SSH:
+
+```sh
+cd /home/jodamuover-finanzas/htdocs/finanzas.jodamuover.com
+composer install --no-dev --optimize-autoloader
+find app bin config -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+php -l index.php
+php bin/migrate.php
+php bin/check-install.php
+```
+
+La migración `006_phase_seven_financial_tools.sql` añade cuotas objetivo, lotes de conciliación y staging de respaldos. No borra datos existentes. Si la migración falla, detente y comparte solo el error; no la repitas a ciegas si pudo quedar aplicada parcialmente.
+
+- **Cuota objetivo**: se puede guardar en cada deuda activa. Muestra los pagos registrados durante el mes (capital más interés) frente al objetivo. No programa, confirma ni registra pagos nuevos; en deudas familiares solo propietarios y administradores pueden cambiar el objetivo.
+- **Tendencias** (`/trends`): resume ingresos, gastos y balance mes a mes para los últimos 12 meses y los compara con los 12 anteriores, usando la misma clasificación contable que los informes mensuales. El mes en curso puede estar incompleto.
+- **Conciliación manual** (`/reconciliation`): acepta CSV de hasta 2 MB y 1.000 filas. Sugiere coincidencias exactas por cuenta, fecha, dirección e importe; cada decisión requiere confirmación. No crea ni modifica operaciones, movimientos ni saldos.
+- **Restaurar respaldo** (`/backups/restore`): admite archivos JSON de formato 1 o 2, hasta 8 MB y 5.000 filas. Primero muestra una vista previa; cada hogar del respaldo se asigna manualmente al espacio personal, a un hogar administrado o se omite. La restauración usa una transacción, remapea relaciones y agrega solo lo que falta. Nunca borra ni reemplaza registros; si detecta una referencia incompatible, cancela toda la restauración. No importa usuarios ni credenciales.
+
+Para validar en una base de pruebas, guarda una cuota objetivo y registra un pago de prueba para revisar el progreso; compara `/trends` con los informes mensuales de meses con anulaciones e intereses; carga un extracto CSV con una coincidencia y otra fila sin coincidencia, confirma decisiones y verifica que los saldos no cambien; por último, carga un respaldo de prueba, revisa el mapeo y restaura, confirmando que no se duplican datos ni se reemplaza un presupuesto existente. En el panel PHP del hosting configura `upload_max_filesize` en al menos `8M` y `post_max_size` en al menos `10M`. No uses datos financieros reales para probar.
+
+## Interfaz AdminLTE
+
+La aplicación usa AdminLTE 4 con Bootstrap 5 e iconos Bootstrap, con versiones fijadas y atributos de integridad para los recursos CDN. La política CSP permite esos recursos de `cdn.jsdelivr.net`; Composer no requiere paquetes adicionales porque AdminLTE es una dependencia de interfaz, no de PHP. Al subir cambios, conserva `index.php`, `app/Views/layout.php` y `assets/app.css` juntos para que funcionen la navegación adaptable, los estilos y la política CSP.
 
 ## Página pública e indexación
 

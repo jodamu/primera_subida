@@ -46,6 +46,12 @@ try {
     $checks['Migración de Fase 4'] = (bool) $migration->fetchColumn();
     $migration->execute(['migration' => '005_recurring_movements.sql']);
     $checks['Migración de Fase 5'] = (bool) $migration->fetchColumn();
+    $migration->execute(['migration' => '006_phase_seven_financial_tools.sql']);
+    $checks['Migración de Fase 7'] = (bool) $migration->fetchColumn();
+    $migration->execute(['migration' => '007_custom_categories.sql']);
+    $checks['Migración de categorías propias (Fase 8)'] = (bool) $migration->fetchColumn();
+    $migration->execute(['migration' => '008_currency_attachments_notifications_demo.sql']);
+    $checks['Migración de monedas, adjuntos y demo (Fase 8)'] = (bool) $migration->fetchColumn();
 } catch (Throwable $exception) {
     $checks['Conexión/esquema de MySQL'] = false;
     fwrite(STDERR, $exception->getMessage() . PHP_EOL);

@@ -146,7 +146,7 @@ final class AccountRepository
                 initial_balance, initial_balance_date, currency, overdraft_enabled, overdraft_limit
              ) VALUES (
                 :account_type_id, :name, :scope, :owner_user_id, :household_id, :created_by,
-                :initial_balance, :initial_balance_date, "COP", :overdraft_enabled, :overdraft_limit
+                :initial_balance, :initial_balance_date, :currency, :overdraft_enabled, :overdraft_limit
              )'
         );
         $this->bindValues($statement, $data);

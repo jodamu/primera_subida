@@ -89,7 +89,7 @@ final class CsvImportService
             throw new DomainException('No fue posible leer el archivo CSV.');
         }
         try {
-            $rows = $this->parseRows($handle, $delimiter, $input);
+            $rows = $this->parseRows($handle, $delimiter, $input, $userId, $account);
         } finally {
             fclose($handle);
         }
@@ -182,7 +182,7 @@ final class CsvImportService
         }
     }
 
-    private function parseRows($handle, string $delimiter, array $input): array
+    private function parseRows($handle, string $delimiter, array $input, int $userId, array $account): array
     {
         $headers = fgetcsv($handle, 0, $delimiter, '"', '\\');
         if (!is_array($headers) || count($headers) < 3) {
@@ -225,7 +225,15 @@ final class CsvImportService
         }
         $categoryByName = [];
         $categoryById = [];
-        foreach ($this->operations->categories() as $category) {
+        foreach ($this->operations->categories($userId) as $category) {
+            if (!\App\Repositories\OperationRepository::categoryFitsSpace(
+                $category,
+                (string) $account['scope'],
+                $account['owner_user_id'] === null ? null : (int) $account['owner_user_id'],
+                $account['household_id'] === null ? null : (int) $account['household_id']
+            )) {
+                continue;
+            }
             $categoryByName[mb_strtolower(trim($category['name']))] = $category;
             $categoryById[(int) $category['id']] = $category;
         }

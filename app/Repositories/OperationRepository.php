@@ -12,20 +12,59 @@ final class OperationRepository
     {
     }
 
-    public function categories(): array
+    /** Categorías globales y, si se indica usuario, las propias de sus espacios. */
+    public function categories(?int $userId = null): array
     {
-        return $this->db->query(
-            'SELECT id, code, name, kind
+        if ($userId === null) {
+            return $this->db->query(
+                'SELECT id, code, name, kind, scope, owner_user_id, household_id
+                 FROM categories
+                 WHERE is_active = 1
+                 ORDER BY kind, sort_order, name'
+            )->fetchAll();
+        }
+
+        $statement = $this->db->prepare(
+            'SELECT id, code, name, kind, scope, owner_user_id, household_id
              FROM categories
              WHERE is_active = 1
+               AND (
+                 scope IS NULL
+                 OR (scope = "personal" AND owner_user_id = :user_id)
+                 OR (scope = "household" AND household_id IN (
+                     SELECT household_id FROM household_members
+                     WHERE user_id = :member_user_id AND status = "active"
+                 ))
+               )
              ORDER BY kind, sort_order, name'
-        )->fetchAll();
+        );
+        $statement->execute(['user_id' => $userId, 'member_user_id' => $userId]);
+
+        return $statement->fetchAll();
+    }
+
+    public static function categoryFitsSpace(
+        array $category,
+        string $scope,
+        ?int $ownerUserId,
+        ?int $householdId
+    ): bool {
+        if ($category['scope'] === null) {
+            return true;
+        }
+        if ($category['scope'] !== $scope) {
+            return false;
+        }
+
+        return $scope === 'personal'
+            ? (int) $category['owner_user_id'] === (int) $ownerUserId
+            : (int) $category['household_id'] === (int) $householdId;
     }
 
     public function findCategory(int $categoryId): ?array
     {
         $statement = $this->db->prepare(
-            'SELECT id, kind
+            'SELECT id, kind, scope, owner_user_id, household_id
              FROM categories
              WHERE id = :id AND is_active = 1
              LIMIT 1'
@@ -41,7 +80,7 @@ final class OperationRepository
         $statement = $this->db->prepare(
             'SELECT id
              FROM categories
-             WHERE code = :code AND kind = "expense" AND is_active = 1
+             WHERE code = :code AND kind = "expense" AND is_active = 1 AND scope IS NULL
              LIMIT 1'
         );
         $statement->execute(['code' => $code]);
@@ -221,7 +260,9 @@ final class OperationRepository
         $statement = $this->db->prepare(
             'SELECT o.id, o.operation_type, o.status, o.scope, o.description,
                     o.effective_date, o.created_at, o.reversal_of_operation_id,
-                    c.name AS category_name, summary.amount, summary.account_summary
+                    c.name AS category_name, summary.amount, summary.account_summary,
+                    (SELECT COUNT(*) FROM operation_attachments att
+                     WHERE att.operation_id = o.id AND att.deleted_at IS NULL) AS attachment_count
              FROM operations o
              INNER JOIN (
                 SELECT entries.operation_id,
@@ -230,7 +271,7 @@ final class OperationRepository
                 FROM (
                     SELECT m.operation_id,
                            CAST(m.amount AS DECIMAL(15,2)) AS amount,
-                           CONCAT(a.name, CASE WHEN m.direction = "outflow" THEN " (salida)" ELSE " (entrada)" END) AS item_summary,
+                           CONCAT(a.name, " [", a.currency, "]", CASE WHEN m.direction = "outflow" THEN " (salida " ELSE " (entrada " END, FORMAT(m.amount, 2), ")") AS item_summary,
                            m.id AS sort_id
                     FROM movements m
                     INNER JOIN accounts a ON a.id = m.account_id

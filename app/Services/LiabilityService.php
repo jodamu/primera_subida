@@ -133,6 +133,14 @@ final class LiabilityService
 
             $liability = $this->liabilities->findForUpdate($liabilityId);
             $this->assertLiabilityAccess($liability, $userId);
+            if (!\App\Repositories\OperationRepository::categoryFitsSpace(
+                $category,
+                (string) $liability['scope'],
+                $liability['owner_user_id'] === null ? null : (int) $liability['owner_user_id'],
+                $liability['household_id'] === null ? null : (int) $liability['household_id']
+            )) {
+                throw new DomainException('La categoría no pertenece al espacio de la deuda seleccionada.');
+            }
             if ($date < $liability['initial_balance_date']) {
                 throw new DomainException('La fecha del cargo no puede ser anterior a la fecha inicial de la deuda.');
             }
@@ -358,6 +366,39 @@ final class LiabilityService
                 $userId,
                 $liability['household_id'] === null ? null : (int) $liability['household_id'],
                 'finance.liability_archived',
+                'liability',
+                $liabilityId
+            );
+            $this->db->commit();
+        } catch (Throwable $exception) {
+            $this->rollback();
+            throw $exception;
+        }
+    }
+
+    public function setPlannedMonthlyPayment(int $userId, mixed $liabilityIdValue, mixed $amountValue): void
+    {
+        $liabilityId = $this->positiveId($liabilityIdValue, 'Selecciona una deuda válida.');
+        $amount = $amountValue === null || $amountValue === ''
+            ? null
+            : DecimalAmount::normalize($amountValue);
+
+        $this->beginFinancialTransaction();
+        try {
+            $liability = $this->liabilities->findForUpdate($liabilityId);
+            $this->assertLiabilityAccess($liability, $userId);
+            if ($liability['scope'] === 'household') {
+                $role = $this->accounts->memberRole((int) $liability['household_id'], $userId, true);
+                if (!$role || !in_array($role, ['owner', 'admin'], true)) {
+                    throw new DomainException('Solo el propietario o un administrador puede cambiar la cuota objetivo de una deuda familiar.');
+                }
+            }
+
+            $this->liabilities->setPlannedMonthlyPayment($liabilityId, $amount);
+            $this->audit(
+                $userId,
+                $liability['household_id'] === null ? null : (int) $liability['household_id'],
+                'finance.liability_payment_target_updated',
                 'liability',
                 $liabilityId
             );

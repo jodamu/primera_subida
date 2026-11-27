@@ -76,6 +76,7 @@ final class ReportService
                 LEFT JOIN (
                     SELECT operation_id, SUM(amount) AS cash_amount
                     FROM movements
+                    WHERE account_id IN (SELECT id FROM accounts WHERE currency = "COP")
                     GROUP BY operation_id
                 ) cash ON cash.operation_id = o.id
                 LEFT JOIN (
@@ -86,6 +87,7 @@ final class ReportService
                 ) debt ON debt.operation_id = o.id
                 LEFT JOIN categories c ON c.id = COALESCE(o.category_id, original.category_id)
                 WHERE o.confirmed_at IS NOT NULL
+                  AND (cash.cash_amount IS NOT NULL OR debt.debt_amount IS NOT NULL)
                   AND o.effective_date BETWEEN :month_start AND :month_end
                   AND (' . $scopeSql . ')
              ),
@@ -148,5 +150,68 @@ final class ReportService
                 $rows
             ),
         ];
+    }
+
+    public function trends(int $userId, mixed $householdId = null): array
+    {
+        $currentMonth = new \DateTimeImmutable('first day of this month');
+        $periods = [];
+        $currentTotals = ['income' => 0, 'expense' => 0, 'net' => 0];
+        $previousTotals = ['income' => 0, 'expense' => 0, 'net' => 0];
+
+        for ($offset = 23; $offset >= 0; $offset--) {
+            $date = $currentMonth->modify('-' . $offset . ' months');
+            $report = $this->monthly($userId, $date->format('Y'), $date->format('n'), $householdId);
+            $period = [
+                'year' => (int) $date->format('Y'),
+                'month' => (int) $date->format('n'),
+                'income' => $report['income_total'],
+                'expense' => $report['expense_total'],
+                'net' => $report['net_total'],
+            ];
+            $isCurrentPeriod = $offset < 12;
+            foreach (['income', 'expense', 'net'] as $kind) {
+                $amount = $this->minorUnits($period[$kind]);
+                if ($isCurrentPeriod) {
+                    $currentTotals[$kind] += $amount;
+                } else {
+                    $previousTotals[$kind] += $amount;
+                }
+            }
+            if ($isCurrentPeriod) {
+                $periods[] = $period;
+            }
+        }
+
+        return [
+            'household_id' => $report['household_id'],
+            'periods' => $periods,
+            'current_totals' => $this->formatTotals($currentTotals),
+            'previous_totals' => $this->formatTotals($previousTotals),
+        ];
+    }
+
+    private function minorUnits(string $amount): int
+    {
+        $negative = str_starts_with($amount, '-');
+        $absolute = $negative ? substr($amount, 1) : $amount;
+        [$whole, $fraction] = array_pad(explode('.', $absolute, 2), 2, '00');
+        $minorUnits = ((int) $whole * 100) + (int) str_pad($fraction, 2, '0');
+
+        return $negative ? -$minorUnits : $minorUnits;
+    }
+
+    private function formatTotals(array $totals): array
+    {
+        $formatted = [];
+        foreach ($totals as $kind => $amount) {
+            $absolute = abs($amount);
+            $formatted[$kind] = ($amount < 0 ? '-' : '')
+                . intdiv($absolute, 100)
+                . '.'
+                . str_pad((string) ($absolute % 100), 2, '0', STR_PAD_LEFT);
+        }
+
+        return $formatted;
     }
 }

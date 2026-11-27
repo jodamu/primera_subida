@@ -54,6 +54,11 @@ final class AccountService
             throw new DomainException('Selecciona un ámbito válido para la cuenta.');
         }
 
+        $currency = $input['currency'] ?? 'COP';
+        if (!is_string($currency) || !in_array($currency, ['COP', 'USD', 'EUR'], true)) {
+            throw new DomainException('Selecciona una moneda válida (COP, USD o EUR).');
+        }
+
         $initialBalance = DecimalAmount::normalize($input['initial_balance'] ?? '0', true);
         $initialDate = DateValue::normalize($input['initial_balance_date'] ?? null, date('Y-m-d'));
         if ($initialDate > date('Y-m-d')) {
@@ -98,6 +103,7 @@ final class AccountService
                 'household_id' => $householdId,
                 'created_by' => $userId,
                 'initial_balance' => $initialBalance,
+                'currency' => $currency,
                 'initial_balance_date' => $initialDate,
                 'overdraft_enabled' => $overdraftEnabled ? 1 : 0,
                 'overdraft_limit' => $overdraftLimit,

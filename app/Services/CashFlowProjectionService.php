@@ -26,6 +26,7 @@ final class CashFlowProjectionService
             static fn (array $account): bool => $account['scope'] === $space['scope']
                 && self::nullableId($account['owner_user_id']) === $space['owner_user_id']
                 && self::nullableId($account['household_id']) === $space['household_id']
+                && $account['currency'] === 'COP'
         ));
         $accountIds = [];
         $startingCents = 0;

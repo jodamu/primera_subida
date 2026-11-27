@@ -24,9 +24,9 @@ final class OperationService
     ) {
     }
 
-    public function categories(): array
+    public function categories(?int $userId = null): array
     {
-        return $this->operations->categories();
+        return $this->operations->categories($userId);
     }
 
     public function recentForUser(int $userId): array
@@ -91,6 +91,17 @@ final class OperationService
             }
 
             $account = $this->lockAuthorizedAccount($accountId, $userId);
+            if (
+                $categoryId !== null
+                && !OperationRepository::categoryFitsSpace(
+                    $category,
+                    (string) $account['scope'],
+                    $account['owner_user_id'] === null ? null : (int) $account['owner_user_id'],
+                    $account['household_id'] === null ? null : (int) $account['household_id']
+                )
+            ) {
+                throw new DomainException('La categoría no pertenece al espacio de la cuenta seleccionada.');
+            }
             if ($date < $account['initial_balance_date']) {
                 throw new DomainException('La fecha del movimiento no puede ser anterior al saldo inicial de la cuenta.');
             }
@@ -151,7 +162,15 @@ final class OperationService
         $account = $this->lockAuthorizedAccount($accountId, $userId);
         $balance = $this->accounts->balanceForAccount($accountId);
         $categoriesById = [];
-        foreach ($this->operations->categories() as $category) {
+        foreach ($this->operations->categories($userId) as $category) {
+            if (!OperationRepository::categoryFitsSpace(
+                $category,
+                (string) $account['scope'],
+                $account['owner_user_id'] === null ? null : (int) $account['owner_user_id'],
+                $account['household_id'] === null ? null : (int) $account['household_id']
+            )) {
+                continue;
+            }
             $categoriesById[(int) $category['id']] = $category;
         }
         $operationIds = [];
@@ -311,12 +330,16 @@ final class OperationService
                 throw new DomainException('La fecha de la transferencia no puede ser anterior al saldo inicial de una cuenta.');
             }
 
+            $destinationAmount = $amount;
             if ($source['currency'] !== $destination['currency']) {
-                throw new DomainException('Las transferencias entre monedas distintas todavía no están disponibles.');
+                if (!isset($input['destination_amount']) || trim((string) $input['destination_amount']) === '') {
+                    throw new DomainException('Indica el valor recibido en la cuenta de destino (' . $destination['currency'] . ').');
+                }
+                $destinationAmount = DecimalAmount::normalize($input['destination_amount']);
             }
 
             $this->ensureWithdrawalIsAllowed($source, $amount);
-            $this->ensureDepositIsWithinMaximum($destination, $amount);
+            $this->ensureDepositIsWithinMaximum($destination, $destinationAmount);
             $operationId = $this->operations->create([
                 'operation_type' => 'transfer',
                 'scope' => $source['scope'],
@@ -339,7 +362,7 @@ final class OperationService
                 $operationId,
                 $destinationId,
                 'inflow',
-                $amount
+                $destinationAmount
             );
             $this->operations->addTransfer($operationId, $sourceMovementId, $destinationMovementId);
             $this->audit(

@@ -35,7 +35,7 @@
     <label>Avisar al alcanzar (% del presupuesto)
       <input type="number" name="budget_alert_percent" min="1" max="100" value="<?= (int) $settings['budget_alert_percent'] ?>" required <?= $canManage ? '' : 'disabled' ?>>
     </label>
-    <label>Días de anticipación para metas
+    <label>Días de anticipación para metas y vencimientos
       <input type="number" name="reminder_days_before" min="0" max="30" value="<?= (int) $settings['reminder_days_before'] ?>" required <?= $canManage ? '' : 'disabled' ?>>
     </label>
     <label>Zona horaria de este espacio
@@ -47,7 +47,7 @@
     </label>
     <label class="checkbox-card form-grid-full">
       <input type="checkbox" name="reminders_enabled" value="1" <?= (int) $settings['reminders_enabled'] === 1 ? 'checked' : '' ?> <?= $canManage ? '' : 'disabled' ?>>
-      <span><strong>Activar recordatorios por correo</strong><small>Requiere que el servidor tenga SMTP configurado y la tarea diaria programada.</small></span>
+      <span><strong>Activar recordatorios y resumen semanal por correo</strong><small>Incluye presupuestos, metas, deudas y recurrentes. Requiere SMTP y la tarea diaria programada.</small></span>
     </label>
     <?php if ($canManage): ?>
       <div class="form-actions form-grid-full">
@@ -57,3 +57,23 @@
     <?php endif; ?>
   </form>
 </section>
+
+<?php if (!empty($demoEnabled) || !empty($demoHousehold)): ?>
+<section class="panel section-gap">
+  <div class="panel-heading"><div><p class="eyebrow">DATOS DE PRUEBA</p><h2>Hogar de demostración</h2></div></div>
+  <p class="muted">Crea un hogar aislado llamado "Demostración" con cuentas en COP, USD y EUR, movimientos, deuda, presupuesto, meta y recurrente. No toca tus datos reales y puedes eliminarlo por completo.</p>
+  <?php if (empty($demoHousehold)): ?>
+    <form method="post" action="/settings/demo" data-confirm="¿Crear el hogar de demostración con datos de ejemplo?">
+      <input type="hidden" name="_csrf" value="<?= e(\App\Security\Csrf::token()) ?>">
+      <input type="hidden" name="action" value="create">
+      <button class="button button-secondary" type="submit">Crear datos de demostración</button>
+    </form>
+  <?php else: ?>
+    <form method="post" action="/settings/demo" data-confirm="Se eliminarán definitivamente el hogar de demostración y todos sus movimientos. ¿Continuar?">
+      <input type="hidden" name="_csrf" value="<?= e(\App\Security\Csrf::token()) ?>">
+      <input type="hidden" name="action" value="delete">
+      <button class="button button-quiet" type="submit">Eliminar datos de demostración</button>
+    </form>
+  <?php endif; ?>
+</section>
+<?php endif; ?>

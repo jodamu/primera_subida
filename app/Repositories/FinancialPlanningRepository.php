@@ -13,14 +13,25 @@ final class FinancialPlanningRepository
     {
     }
 
-    public function expenseCategories(): array
+    public function expenseCategories(?array $space = null): array
     {
-        return $this->db->query(
-            'SELECT id, name
+        $sql = 'SELECT id, name
              FROM categories
-             WHERE kind = "expense" AND is_active = 1
-             ORDER BY sort_order, name'
-        )->fetchAll();
+             WHERE kind = "expense" AND is_active = 1';
+        $params = [];
+        if ($space !== null) {
+            if ($space['scope'] === 'personal') {
+                $sql .= ' AND (scope IS NULL OR (scope = "personal" AND owner_user_id = :owner_user_id))';
+                $params['owner_user_id'] = (int) $space['owner_user_id'];
+            } else {
+                $sql .= ' AND (scope IS NULL OR (scope = "household" AND household_id = :household_id))';
+                $params['household_id'] = (int) $space['household_id'];
+            }
+        }
+        $statement = $this->db->prepare($sql . ' ORDER BY sort_order, name');
+        $statement->execute($params);
+
+        return $statement->fetchAll();
     }
 
     public function budgetsForSpace(array $space, string $periodStart, string $periodEnd): array
@@ -50,7 +61,9 @@ final class FinancialPlanningRepository
                 LEFT JOIN operations original ON original.id = o.reversal_of_operation_id
                 LEFT JOIN (
                     SELECT operation_id, SUM(amount) AS amount
-                    FROM movements GROUP BY operation_id
+                    FROM movements
+                    WHERE account_id IN (SELECT id FROM accounts WHERE currency = "COP")
+                    GROUP BY operation_id
                 ) cash ON cash.operation_id = o.id
                 LEFT JOIN (
                     SELECT operation_id, SUM(amount) AS amount,
