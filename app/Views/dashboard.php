@@ -66,6 +66,24 @@ $reportQuery = http_build_query([
 </section>
 
 <section class="panel section-gap">
+  <div class="panel-heading">
+    <div><p class="eyebrow">AVISOS</p><h2>Próximos vencimientos y alertas</h2></div>
+  </div>
+  <?php if (!$financialAlerts): ?>
+    <div class="empty-state"><strong>No hay alertas próximas</strong><p>Te avisaremos aquí cuando una programación, presupuesto o fecha de tarjeta requiera atención.</p></div>
+  <?php else: ?>
+    <div class="financial-alert-list">
+      <?php foreach ($financialAlerts as $alert): ?>
+        <article class="financial-alert financial-alert-<?= e($alert['severity']) ?>">
+          <div><strong><?= e($alert['title']) ?></strong><p><?= e($alert['message']) ?> <span>· <?= e($alert['date']) ?></span></p></div>
+          <a class="button button-quiet" href="<?= e($alert['href']) ?>">Revisar</a>
+        </article>
+      <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
+</section>
+
+<section class="panel section-gap">
   <div class="panel-heading"><div><p class="eyebrow">GASTOS DEL PERÍODO</p><h2>Principales categorías</h2></div></div>
   <?php if (!$expenseCategories): ?>
     <div class="empty-state"><strong>Aún no hay gastos en este período</strong><p>Cuando registres movimientos, verás su distribución aquí.</p></div>

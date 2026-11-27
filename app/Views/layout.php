@@ -35,13 +35,15 @@
         <a href="/transactions" <?= $currentPath === '/transactions' ? 'aria-current="page"' : '' ?>>Movimientos</a>
         <a href="/liabilities" <?= $currentPath === '/liabilities' ? 'aria-current="page"' : '' ?>>Deudas</a>
         <a href="/reports" <?= $currentPath === '/reports' ? 'aria-current="page"' : '' ?>>Informes</a>
-        <details class="nav-group" <?= in_array($currentPath, ['/budgets', '/goals', '/imports', '/settings', '/recurring', '/exports/backup'], true) ? 'open' : '' ?>>
+        <details class="nav-group" <?= in_array($currentPath, ['/budgets', '/goals', '/imports', '/settings', '/recurring', '/exports/backup', '/forecast', '/debt-plan'], true) ? 'open' : '' ?>>
           <summary>Planificación</summary>
           <div class="nav-dropdown">
             <a href="/budgets" <?= $currentPath === '/budgets' ? 'aria-current="page"' : '' ?>>Presupuestos</a>
             <a href="/goals" <?= $currentPath === '/goals' ? 'aria-current="page"' : '' ?>>Metas de ahorro</a>
             <a href="/imports" <?= $currentPath === '/imports' ? 'aria-current="page"' : '' ?>>Importar CSV</a>
             <a href="/recurring" <?= $currentPath === '/recurring' ? 'aria-current="page"' : '' ?>>Recurrentes</a>
+            <a href="/forecast" <?= $currentPath === '/forecast' ? 'aria-current="page"' : '' ?>>Proyección</a>
+            <a href="/debt-plan" <?= $currentPath === '/debt-plan' ? 'aria-current="page"' : '' ?>>Plan de deudas</a>
             <a href="/settings" <?= $currentPath === '/settings' ? 'aria-current="page"' : '' ?>>Configuración</a>
             <a href="/exports/backup">Descargar respaldo</a>
           </div>

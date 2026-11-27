@@ -106,6 +106,18 @@ select:focus { outline: 3px solid rgba(40, 116, 232, .16); border-color: var(--b
 .category-chart-label span { color: var(--muted); }
 .category-chart-label strong { color: var(--navy); text-align: right; }
 .category-chart-progress { display: block; width: 100%; height: 10px; overflow: hidden; border: 0; border-radius: 999px; background: #edf1f7; accent-color: #2874e8; }
+.financial-alert-list { display: grid; gap: 10px; }
+.financial-alert { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1px solid var(--line); border-left: 4px solid #2874e8; border-radius: 11px; background: #f7faff; }
+.financial-alert-warning { border-left-color: #d78a1c; background: #fffaf0; }
+.financial-alert strong { color: var(--navy); font-size: 14px; }
+.financial-alert p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+.debt-plan-form { display: grid; }
+.debt-plan-card { display: grid; gap: 16px; }
+.debt-plan-balance { color: var(--navy); font-size: 22px; white-space: nowrap; }
+.debt-plan-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); font-size: 13px; }
+.debt-plan-result { display: grid; gap: 4px; padding: 14px; border-radius: 10px; background: #f1f7ff; color: #294d7c; font-size: 14px; }
+.debt-plan-result span { font-size: 13px; }
+.debt-plan-submit { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 10px; padding: 14px 0; background: var(--page); }
 .recurring-form .recurring-interval { display: flex; align-items: center; gap: 10px; }
 .recurring-interval input { max-width: 100px; }
 .recurring-interval span { color: var(--muted); font-size: 12px; font-weight: 450; }
@@ -195,6 +207,8 @@ select:focus { outline: 3px solid rgba(40, 116, 232, .16); border-color: var(--b
   .auth-card { padding: 24px 20px; }
   .panel { padding: 20px 16px; }
   .household-item { grid-template-columns: 1fr; }
+  .financial-alert { align-items: flex-start; flex-direction: column; }
+  .debt-plan-balance { font-size: 19px; }
   .invite-form { flex-direction: column; }
   .invite-form .button { width: 100%; }
   .feature-grid { grid-template-columns: 1fr; }

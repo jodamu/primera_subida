@@ -17,7 +17,10 @@ use App\Repositories\RecurringMovementRepository;
 use App\Services\AuthService;
 use App\Services\AccountActionService;
 use App\Services\AccountService;
+use App\Services\CashFlowProjectionService;
+use App\Services\DebtPlanService;
 use App\Services\FinancialBackupService;
+use App\Services\FinancialAlertService;
 use App\Services\HouseholdService;
 use App\Services\FinancialSettingsService;
 use App\Services\FinancialPlanningService;
@@ -131,15 +134,17 @@ try {
     $accountActions = new AccountActionService($db, $users, new MailService());
     $households = new HouseholdService($db);
     $financialSpaces = new FinancialSpaceService($households);
+    $financialSettingsRepository = new FinancialSettingsRepository($db);
     $financialSettings = new FinancialSettingsService(
         $financialSpaces,
-        new FinancialSettingsRepository($db)
+        $financialSettingsRepository
     );
+    $financialPlanningRepository = new FinancialPlanningRepository($db);
     $financialPlanning = new FinancialPlanningService(
         $db,
         $financialSpaces,
         $financialSettings,
-        new FinancialPlanningRepository($db)
+        $financialPlanningRepository
     );
     $accountRepository = new AccountRepository($db);
     $liabilityRepository = new LiabilityRepository($db);
@@ -148,13 +153,27 @@ try {
     $operationService = new OperationService($db, $accountRepository, $operationRepository, $liabilityRepository);
     $liabilityService = new LiabilityService($db, $accountRepository, $liabilityRepository, $operationRepository);
     $reportService = new ReportService($db, $households);
+    $recurringRepository = new RecurringMovementRepository($db);
     $recurringService = new RecurringMovementService(
-        new RecurringMovementRepository($db),
+        $recurringRepository,
         $accountService,
         $operationService,
         $financialSpaces
     );
     $backupService = new FinancialBackupService($db, $households);
+    $projectionService = new CashFlowProjectionService(
+        $accountService,
+        $recurringRepository,
+        $financialSpaces
+    );
+    $debtPlanService = new DebtPlanService($liabilityService, $financialSpaces);
+    $financialAlerts = new FinancialAlertService(
+        $financialSpaces,
+        $financialSettings,
+        $financialPlanningRepository,
+        $liabilityService,
+        $recurringRepository
+    );
     $csvImportService = new CsvImportService(
         $db,
         $accountRepository,
@@ -648,6 +667,42 @@ try {
         exit;
     }
 
+    if ($path === '/forecast' && $method === 'GET') {
+        $userId = authenticated_user_id();
+        try {
+            $projection = $projectionService->project($userId, $_GET['space'] ?? 'personal');
+            render_page('forecast', [
+                'title' => 'Proyección de flujo de caja',
+                'projection' => $projection,
+                'spaces' => $financialSpaces->listForUser($userId),
+            ]);
+        } catch (DomainException $exception) {
+            http_response_code(422);
+            render_page('error', ['title' => 'Proyección no disponible', 'message' => $exception->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($path === '/debt-plan' && $method === 'GET') {
+        $userId = authenticated_user_id();
+        try {
+            $planData = $debtPlanService->plan(
+                $userId,
+                $_GET['space'] ?? 'personal',
+                $_GET['payments'] ?? []
+            );
+            render_page('debt-plan', [
+                'title' => 'Plan de pago de deudas',
+                'planData' => $planData,
+                'spaces' => $financialSpaces->listForUser($userId),
+            ]);
+        } catch (DomainException $exception) {
+            http_response_code(422);
+            render_page('error', ['title' => 'Simulación no disponible', 'message' => $exception->getMessage()]);
+        }
+        exit;
+    }
+
     if ($path === '/reports/print' && $method === 'GET') {
         $userId = authenticated_user_id();
         try {
@@ -1070,6 +1125,7 @@ try {
                 'invitationUrl' => $invitationUrl,
                 'report' => $report,
                 'activeAccounts' => $activeAccounts,
+                'financialAlerts' => $financialAlerts->forUser($userId),
             ]);
         } catch (DomainException $exception) {
             http_response_code(422);

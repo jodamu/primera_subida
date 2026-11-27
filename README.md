@@ -135,6 +135,16 @@ El panel de inicio muestra el flujo de caja mensual, gastos por categoría y sal
 
 Las programaciones recurrentes admiten ingresos y gastos semanales, mensuales o anuales. Al llegar la fecha aparecen como pendientes en `Movimientos recurrentes`; ningún movimiento se agrega a una cuenta ni modifica saldos hasta que pulses **Revisar y confirmar**. No necesitan cron. En meses sin el día programado (por ejemplo, el 31), se usa el último día del mes. Para probar, usa una cuenta y base de pruebas; comprueba el movimiento pendiente antes de confirmarlo y verifica que se registre una sola vez. Pausar una programación no la elimina y su historial confirmado se conserva.
 
+## Fase 6: proyección, plan de deudas y alertas
+
+Esta fase no añade migraciones. Requiere que las migraciones 003, 004 y 005 estén aplicadas para que estén disponibles deudas, presupuestos y movimientos recurrentes. Sube los archivos sin reemplazar `.env`; en SSH ejecuta `php -l index.php`, el lint de PHP descrito arriba y `php bin/check-install.php`. No se necesita volver a ejecutar una migración nueva; `php bin/migrate.php` omitirá las registradas.
+
+- **Proyección** (`/forecast`): suma los saldos actuales de las cuentas activas del espacio elegido y estima 30, 60 y 90 días con los movimientos recurrentes activos. Es solo informativa: no confirma recurrencias ni cambia saldos. Los importes son estimaciones, no incluyen ingresos o gastos no programados, y los movimientos vencidos pueden aparecer como estimados aunque sigan pendientes de confirmación.
+- **Plan de deudas** (`/debt-plan`): permite probar un pago mensual por deuda y estima meses e intereses, con pagos al final del mes y tasa anual dividida entre 12. No guarda el importe ni registra pagos. Si la tasa no está registrada, la simulación supone 0%; confirma tasas, cuotas y condiciones con la entidad. Las tarjetas muestran el próximo día de pago conocido, pero la aplicación no guarda el valor mínimo ni el saldo facturado de cada ciclo.
+- **Alertas en el inicio**: muestra presupuestos que alcanzaron el umbral configurado, movimientos recurrentes próximos o pendientes, y fechas de pago cercanas de tarjetas activas con saldo. Son avisos internos; no se envían correos nuevos ni se conoce si una factura concreta ya fue pagada.
+
+Prueba estas funciones con una base de pruebas: crea una recurrencia y confirma que la proyección la incluya sin cambiar el saldo; compara una deuda sin interés con pagos hipotéticos y luego con una cuota menor que el interés mensual estimado; revisa alertas de un presupuesto que supere su umbral y una recurrencia vencida. No registres cuotas de prueba en una cuenta real.
+
 ## Página pública e indexación
 
 La ruta `/` muestra una página pública en español para buscadores y visitantes. Las rutas de inicio de sesión, registro, invitaciones y la aplicación autenticada usan `noindex, nofollow`. `robots.txt` publica el sitemap, que contiene únicamente la página pública. El marcado estructurado describe la aplicación sin atribuirle módulos que aún no están disponibles.
@@ -165,4 +175,5 @@ El `.htaccess` enruta las solicitudes al controlador frontal y bloquea el acceso
 - Fase 3: código de tarjetas/deudas, informes, verificación/recuperación por correo y gestión de roles implementado; pendiente subir archivos, configurar SMTP, ejecutar la migración y probar en el hosting.
 - Fase 4: configuración financiera por espacio, presupuestos, metas, importación CSV y recordatorios programados implementados; pendiente subir archivos, aplicar la migración y validar en el hosting.
 - Fase 5: panel de flujo de caja, movimientos recurrentes con confirmación manual, exportación mensual CSV/PDF e información financiera en respaldo JSON; pendiente subir archivos, aplicar la migración y validar en el hosting.
+- Fase 6: proyección estimada de caja, simulación de pago de deudas y alertas internas; implementada sin migración nueva, pendiente validación con datos de prueba en el hosting.
 - Página pública en español con metadatos SEO, sitemap y marcado estructurado; áreas de cuenta excluidas del índice.
