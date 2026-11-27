@@ -68,7 +68,9 @@ final class FinancialPlanningRepository
                 LEFT JOIN (
                     SELECT operation_id, SUM(amount) AS amount,
                            SUM(interest_amount) AS interest
-                    FROM liability_movements GROUP BY operation_id
+                    FROM liability_movements
+                    WHERE liability_id IN (SELECT id FROM liabilities WHERE currency = "COP")
+                    GROUP BY operation_id
                 ) debt ON debt.operation_id = o.id
                 WHERE o.scope = :spent_scope
                   AND (

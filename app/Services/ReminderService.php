@@ -22,6 +22,7 @@ final class ReminderService
         private readonly FinancialSettingsRepository $settings,
         private readonly FinancialPlanningRepository $planning,
         private readonly MailService $mail,
+        private readonly ReportService $reports,
     ) {
     }
 
@@ -141,13 +142,13 @@ final class ReminderService
             }
 
             $weekStart = $today->modify('monday this week');
-            $summary = $this->weeklyTotals($space, $weekStart->modify('-7 days')->format('Y-m-d'), $weekStart->modify('-1 day')->format('Y-m-d'));
+            $summary = $this->reports->totalsForSpacePeriod($space, $weekStart->modify('-7 days')->format('Y-m-d'), $weekStart->modify('-1 day')->format('Y-m-d'));
             $body = sprintf(
-                "Resumen de la semana del %s al %s (solo cuentas en COP).\n\nIngresos: %s COP\nGastos: %s COP\n\nDetalle en %s/?household_id=%s",
+                "Resumen de la semana del %s al %s (solo COP, incluye compras con deuda e intereses).\n\nIngresos: %s COP\nGastos: %s COP\n\nDetalle en %s/?household_id=%s",
                 $weekStart->modify('-7 days')->format('Y-m-d'),
                 $weekStart->modify('-1 day')->format('Y-m-d'),
-                $summary['income'],
-                $summary['expense'],
+                $summary['income_total'],
+                $summary['expense_total'],
                 $baseUrl,
                 rawurlencode($space['scope'] === 'household' ? (string) $space['household_id'] : 'personal')
             );
@@ -179,12 +180,13 @@ final class ReminderService
         $limit = $today->modify('+' . $daysBefore . ' days');
         $result = [];
         foreach ($statement->fetchAll() as $row) {
-            $day = min((int) $row['payment_due_day'], 28);
+            $day = (int) $row['payment_due_day'];
             $due = $today->setDate((int) $today->format('Y'), (int) $today->format('n'), $day);
             if ($due < $today) {
-                $due = $due->modify('first day of next month')->setDate(
-                    (int) $due->modify('first day of next month')->format('Y'),
-                    (int) $due->modify('first day of next month')->format('n'),
+                $nextMonth = $today->modify('first day of next month');
+                $due = $nextMonth->setDate(
+                    (int) $nextMonth->format('Y'),
+                    (int) $nextMonth->format('n'),
                     $day
                 );
             }
@@ -206,29 +208,6 @@ final class ReminderService
         $statement->execute(['space_id' => $id, 'from_date' => $from, 'to_date' => $to]);
 
         return $statement->fetchAll();
-    }
-
-    private function weeklyTotals(array $space, string $from, string $to): array
-    {
-        [$where, $id] = $this->spaceWhere($space, 'o');
-        $statement = $this->db->prepare(
-            'SELECT o.operation_type,
-                    CAST(COALESCE(SUM(m.amount), 0) AS CHAR) AS total
-             FROM operations o
-             INNER JOIN movements m ON m.operation_id = o.id
-             INNER JOIN accounts a ON a.id = m.account_id AND a.currency = "COP"
-             WHERE ' . $where . ' AND o.status = "confirmed"
-               AND o.operation_type IN ("income", "expense")
-               AND o.effective_date BETWEEN :from_date AND :to_date
-             GROUP BY o.operation_type'
-        );
-        $statement->execute(['space_id' => $id, 'from_date' => $from, 'to_date' => $to]);
-        $totals = ['income' => '0.00', 'expense' => '0.00'];
-        foreach ($statement->fetchAll() as $row) {
-            $totals[$row['operation_type']] = (string) $row['total'];
-        }
-
-        return $totals;
     }
 
     private function recipients(array $space): array

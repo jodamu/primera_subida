@@ -7,6 +7,8 @@ require dirname(__DIR__) . '/config/bootstrap.php';
 $checks = [
     'PHP 8.3+' => PHP_VERSION_ID >= 80300,
     'PDO MySQL' => extension_loaded('pdo_mysql'),
+    'Fileinfo para adjuntos' => extension_loaded('fileinfo'),
+    'Mbstring' => extension_loaded('mbstring'),
     'Symfony Mailer instalado' => class_exists(\Symfony\Component\Mailer\Mailer::class),
 ];
 

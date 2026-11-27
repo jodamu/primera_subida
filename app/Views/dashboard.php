@@ -9,6 +9,8 @@ foreach ($expenseCategories as $category) {
     $maxExpense = max($maxExpense, (float) $category['total']);
 }
 $expenseCategories = array_slice($expenseCategories, 0, 6);
+$copAccounts = array_values(array_filter($activeAccounts, static fn (array $account): bool => $account['currency'] === 'COP'));
+$comparisonMax = max(0.0, (float) $report['income_total'], (float) $report['expense_total']);
 $reportQuery = http_build_query([
     'year' => $report['year'],
     'month' => $report['month'],
@@ -19,7 +21,7 @@ $reportQuery = http_build_query([
 <section class="welcome">
   <p class="eyebrow">Tu espacio financiero</p>
   <h1>Hola, <?= e($currentUser['name']) ?></h1>
-  <p class="muted">Un resumen claro de tus ingresos, gastos y cuentas personales o compartidas.</p>
+  <p class="muted">Ingresos y gastos en COP. Tus cuentas en otras monedas aparecen por separado.</p>
 </section>
 
 <section class="panel">
@@ -51,18 +53,32 @@ $reportQuery = http_build_query([
 </section>
 
 <section class="report-summary">
-  <article class="report-card">
-    <span>Ingresos</span>
-    <strong><?= e(\App\Support\DecimalAmount::format($report['income_total'])) ?></strong>
+  <article class="report-card metric-income">
+    <span><i class="bi bi-arrow-down-left-circle" aria-hidden="true"></i> Ingresos</span>
+    <strong><?= e(\App\Support\DecimalAmount::format($report['income_total'])) ?> <small>COP</small></strong>
   </article>
-  <article class="report-card">
-    <span>Gastos</span>
-    <strong><?= e(\App\Support\DecimalAmount::format($report['expense_total'])) ?></strong>
+  <article class="report-card metric-expense">
+    <span><i class="bi bi-arrow-up-right-circle" aria-hidden="true"></i> Gastos</span>
+    <strong><?= e(\App\Support\DecimalAmount::format($report['expense_total'])) ?> <small>COP</small></strong>
   </article>
-  <article class="report-card">
-    <span>Balance del período</span>
-    <strong><?= e(\App\Support\DecimalAmount::format($report['net_total'])) ?></strong>
+  <article class="report-card metric-net">
+    <span><i class="bi bi-wallet2" aria-hidden="true"></i> Balance del período</span>
+    <strong><?= e(\App\Support\DecimalAmount::format($report['net_total'])) ?> <small>COP</small></strong>
   </article>
+</section>
+
+<section class="panel section-gap">
+  <div class="panel-heading"><div><p class="eyebrow">EN COP</p><h2>Ingresos frente a gastos</h2></div></div>
+  <div class="category-chart">
+    <?php foreach (['income_total' => 'Ingresos', 'expense_total' => 'Gastos'] as $key => $label): ?>
+      <?php $comparisonValue = $comparisonMax > 0 ? max(0, min(100, (int) round((float) $report[$key] / $comparisonMax * 100))) : 0; ?>
+      <div class="category-chart-row">
+        <div class="category-chart-label"><span><?= e($label) ?></span><strong><?= e(\App\Support\DecimalAmount::format($report[$key])) ?> COP</strong></div>
+        <progress class="category-chart-progress <?= $key === 'income_total' ? 'chart-income' : 'chart-expense' ?>" value="<?= $comparisonValue ?>" max="100" aria-label="<?= e($label) ?>: <?= e($report[$key]) ?> COP"><?= $comparisonValue ?>%</progress>
+      </div>
+    <?php endforeach; ?>
+  </div>
+  <p class="field-help section-gap">Las barras comparan los valores positivos del período; los importes incluyen anulaciones registradas en sus fechas efectivas.</p>
 </section>
 
 <section class="panel section-gap">
@@ -101,12 +117,12 @@ $reportQuery = http_build_query([
 </section>
 
 <section class="panel section-gap">
-  <div class="panel-heading"><div><p class="eyebrow">CUENTAS ACTIVAS</p><h2>Tus saldos</h2></div><a href="/accounts">Administrar cuentas</a></div>
-  <?php if (!$activeAccounts): ?>
-    <div class="empty-state"><strong>Aún no tienes cuentas activas</strong><p>Agrega una cuenta para organizar tus movimientos.</p><a class="button button-primary" href="/accounts">Crear cuenta</a></div>
+  <div class="panel-heading"><div><p class="eyebrow">CUENTAS ACTIVAS EN COP</p><h2>Tus saldos en pesos</h2></div><a href="/accounts">Administrar cuentas</a></div>
+  <?php if (!$copAccounts): ?>
+    <div class="empty-state"><strong>No hay cuentas activas en COP en este espacio</strong><p>Las cuentas en USD y EUR se muestran por separado.</p><a class="button button-primary" href="/accounts">Crear cuenta</a></div>
   <?php else: ?>
     <div class="account-grid">
-      <?php foreach ($activeAccounts as $account): ?>
+      <?php foreach ($copAccounts as $account): ?>
         <article class="account-card">
           <div class="account-card-heading"><h3><?= e($account['name']) ?></h3><span class="role"><?= $account['scope'] === 'household' ? 'Familiar' : 'Personal' ?></span></div>
           <p class="account-balance"><?= e(\App\Support\DecimalAmount::format((string) $account['current_balance'])) ?> <span><?= e($account['currency']) ?></span></p>

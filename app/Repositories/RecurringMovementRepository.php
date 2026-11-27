@@ -15,7 +15,7 @@ final class RecurringMovementRepository
     public function listForUser(int $userId): array
     {
         $statement = $this->db->prepare(
-            'SELECT s.*, a.name AS account_name, c.name AS category_name,
+            'SELECT s.*, a.name AS account_name, a.currency AS account_currency, c.name AS category_name,
                     occurrence.status AS occurrence_status,
                     occurrence.operation_id AS occurrence_operation_id
              FROM recurring_movements s

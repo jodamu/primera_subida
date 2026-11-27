@@ -30,11 +30,11 @@ $statusLabels = ['active' => 'Activa', 'paused' => 'Pausada', 'completed' => 'Co
         <select name="account_id" required>
           <option value="">Selecciona una cuenta</option>
           <?php foreach ($activeAccounts as $account): ?>
-            <option value="<?= (int) $account['id'] ?>"><?= e($account['name']) ?> · <?= $account['scope'] === 'household' ? 'Familiar' : 'Personal' ?></option>
+            <option value="<?= (int) $account['id'] ?>"><?= e($account['name']) ?> [<?= e($account['currency']) ?>] · <?= $account['scope'] === 'household' ? 'Familiar' : 'Personal' ?></option>
           <?php endforeach; ?>
         </select>
       </label>
-      <label>Importe (COP)
+      <label>Importe (moneda de la cuenta)
         <input type="number" name="amount" min="0.01" max="9999999999999.99" step="0.01" required>
       </label>
       <label>Categoría
@@ -85,7 +85,7 @@ $statusLabels = ['active' => 'Activa', 'paused' => 'Pausada', 'completed' => 'Co
               <span class="table-subtitle"><?= e($schedule['account_name']) ?> · <?= e($schedule['category_name']) ?> · <?= e($frequencyLabels[$schedule['frequency']] ?? $schedule['frequency']) ?><?= (int) $schedule['interval_count'] > 1 ? ' · cada ' . (int) $schedule['interval_count'] : '' ?></span>
             </div>
             <div class="recurring-amount">
-              <strong><?= e(\App\Support\DecimalAmount::format((string) $schedule['amount'])) ?></strong>
+              <strong><?= e(\App\Support\DecimalAmount::format((string) $schedule['amount'])) ?> <?= e($schedule['account_currency']) ?></strong>
               <span class="status-pill status-<?= e($schedule['status']) ?>"><?= e($statusLabels[$schedule['status']] ?? $schedule['status']) ?></span>
             </div>
           </div>

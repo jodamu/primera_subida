@@ -45,39 +45,52 @@ final class AttachmentService
         if ($file['error'] !== UPLOAD_ERR_OK || !is_string($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
             throw new DomainException('No pudimos recibir el archivo. Inténtalo de nuevo.');
         }
-        $size = (int) $file['size'];
-        if ($size < 1 || $size > self::MAX_BYTES) {
+        $size = filesize($file['tmp_name']);
+        if ($size === false || $size < 1 || $size > self::MAX_BYTES) {
             throw new DomainException('El archivo debe pesar entre 1 byte y 5 MB.');
         }
         $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
         if (!is_string($mime) || !isset(self::MIME_EXTENSIONS[$mime])) {
             throw new DomainException('Solo se permiten archivos PDF, JPG, PNG o WebP.');
         }
-        $count = $this->db->prepare(
-            'SELECT COUNT(*) FROM operation_attachments WHERE operation_id = :id AND deleted_at IS NULL'
-        );
-        $count->execute(['id' => $operationId]);
-        if ((int) $count->fetchColumn() >= 5) {
-            throw new DomainException('Cada movimiento admite hasta 5 adjuntos.');
+        if (!is_string($file['name']) || !mb_check_encoding($file['name'], 'UTF-8')) {
+            throw new DomainException('El nombre del archivo no es válido.');
         }
-
+        $originalName = preg_replace('/[^\p{L}\p{N}._ -]/u', '_', basename($file['name']));
+        if ($originalName === null) {
+            throw new DomainException('El nombre del archivo no es válido.');
+        }
+        $originalName = mb_substr($originalName, 0, 200);
+        if ($originalName === '') {
+            $originalName = 'adjunto.' . self::MIME_EXTENSIONS[$mime];
+        }
+        $hash = hash_file('sha256', $file['tmp_name']);
+        if ($hash === false) {
+            throw new DomainException('No pudimos leer el archivo.');
+        }
         if (!is_dir($this->storageDir) && !mkdir($this->storageDir, 0750, true) && !is_dir($this->storageDir)) {
             throw new DomainException('No pudimos preparar el almacenamiento de adjuntos.');
         }
         $storedName = bin2hex(random_bytes(20));
         $target = $this->storageDir . DIRECTORY_SEPARATOR . $storedName;
-        if (!move_uploaded_file($file['tmp_name'], $target)) {
-            throw new DomainException('No pudimos guardar el archivo.');
-        }
-        chmod($target, 0640);
-
-        $originalName = preg_replace('/[^\p{L}\p{N}._ -]/u', '_', basename((string) $file['name'])) ?? 'adjunto';
-        $originalName = mb_substr($originalName, 0, 200);
-        if ($originalName === '') {
-            $originalName = 'adjunto.' . self::MIME_EXTENSIONS[$mime];
-        }
-
+        $moved = false;
         try {
+            $this->db->beginTransaction();
+            $this->assertAccess($userId, $operationId, true);
+            $count = $this->db->prepare(
+                'SELECT COUNT(*) FROM operation_attachments WHERE operation_id = :id AND deleted_at IS NULL'
+            );
+            $count->execute(['id' => $operationId]);
+            if ((int) $count->fetchColumn() >= 5) {
+                throw new DomainException('Cada movimiento admite hasta 5 adjuntos.');
+            }
+            if (!move_uploaded_file($file['tmp_name'], $target)) {
+                throw new DomainException('No pudimos guardar el archivo.');
+            }
+            $moved = true;
+            if (!chmod($target, 0640)) {
+                throw new DomainException('No pudimos proteger el archivo.');
+            }
             $this->db->prepare(
                 'INSERT INTO operation_attachments (operation_id, stored_name, original_name, mime_type, size_bytes, sha256, uploaded_by)
                  VALUES (:operation_id, :stored_name, :original_name, :mime_type, :size_bytes, :sha256, :uploaded_by)'
@@ -87,11 +100,17 @@ final class AttachmentService
                 'original_name' => $originalName,
                 'mime_type' => $mime,
                 'size_bytes' => $size,
-                'sha256' => hash_file('sha256', $target),
+                'sha256' => $hash,
                 'uploaded_by' => $userId,
             ]);
+            $this->db->commit();
         } catch (\Throwable $exception) {
-            @unlink($target);
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            if ($moved && !unlink($target)) {
+                error_log('[Mi Finanzas] No se pudo limpiar un adjunto tras una subida fallida.');
+            }
             throw $exception;
         }
     }
@@ -102,7 +121,8 @@ final class AttachmentService
         $row = $this->find($attachmentId);
         $this->assertAccess($userId, (int) $row['operation_id']);
         $path = $this->storageDir . DIRECTORY_SEPARATOR . $row['stored_name'];
-        if (!is_file($path)) {
+        if (!is_file($path) || !is_readable($path) || filesize($path) !== (int) $row['size_bytes']) {
+            error_log('[Mi Finanzas] Archivo de adjunto no disponible: ' . $attachmentId);
             throw new DomainException('El archivo ya no está disponible.');
         }
 
@@ -134,7 +154,7 @@ final class AttachmentService
         return $row;
     }
 
-    private function assertAccess(int $userId, int $operationId): void
+    private function assertAccess(int $userId, int $operationId, bool $lock = false): void
     {
         $statement = $this->db->prepare(
             'SELECT 1 FROM operations o
@@ -143,7 +163,7 @@ final class AttachmentService
                 OR (o.scope = "household" AND EXISTS (
                     SELECT 1 FROM household_members hm
                     WHERE hm.household_id = o.household_id AND hm.user_id = :user_b AND hm.status = "active"))
-             )'
+             )' . ($lock ? ' FOR UPDATE' : '')
         );
         $statement->execute(['operation_id' => $operationId, 'user_a' => $userId, 'user_b' => $userId]);
         if (!$statement->fetchColumn()) {

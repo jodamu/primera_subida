@@ -25,7 +25,7 @@ final class DemoDataService
 
     public function isEnabled(): bool
     {
-        return (string) app_config('DEMO_DATA_ENABLED', '1') !== '0';
+        return app_config('DEMO_DATA_ENABLED', '1') === '1';
     }
 
     public function demoHouseholdFor(int $userId): ?array

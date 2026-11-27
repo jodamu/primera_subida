@@ -68,7 +68,7 @@
         <select name="source_account_id" required>
           <option value="">Selecciona una cuenta</option>
           <?php foreach ($activeAccounts as $account): ?>
-            <option value="<?= (int) $account['id'] ?>"><?= e($account['name']) ?> · <?= $account['scope'] === 'household' ? 'Familiar' : 'Personal' ?></option>
+            <option value="<?= (int) $account['id'] ?>"><?= e($account['name']) ?> [<?= e($account['currency']) ?>] · <?= $account['scope'] === 'household' ? 'Familiar' : 'Personal' ?></option>
           <?php endforeach; ?>
         </select>
       </label>
@@ -76,7 +76,7 @@
         <select name="destination_account_id" required>
           <option value="">Selecciona una cuenta</option>
           <?php foreach ($activeAccounts as $account): ?>
-            <option value="<?= (int) $account['id'] ?>"><?= e($account['name']) ?> · <?= $account['scope'] === 'household' ? 'Familiar' : 'Personal' ?></option>
+            <option value="<?= (int) $account['id'] ?>"><?= e($account['name']) ?> [<?= e($account['currency']) ?>] · <?= $account['scope'] === 'household' ? 'Familiar' : 'Personal' ?></option>
           <?php endforeach; ?>
         </select>
       </label>
@@ -112,7 +112,7 @@
               <td><?= e($operationLabels[$operation['operation_type']] ?? $operation['operation_type']) ?></td>
               <td><?= e($operation['description']) ?><?php if ($operation['category_name']): ?><span class="table-subtitle"><?= e($operation['category_name']) ?></span><?php endif; ?></td>
               <td><?= e($operation['account_summary']) ?></td>
-              <td><?= e(\App\Support\DecimalAmount::format((string) $operation['amount'])) ?></td>
+              <td><?= (int) $operation['currency_count'] === 1 ? e(\App\Support\DecimalAmount::format((string) $operation['amount'])) . ' ' . e($operation['currency']) : 'Ver importes por cuenta' ?></td>
               <td><span class="status-pill status-<?= e($operation['status']) ?>"><?= $operation['status'] === 'cancelled' ? 'Anulada' : 'Confirmada' ?></span></td>
               <td>
                 <a class="button button-quiet" href="/attachments?operation_id=<?= (int) $operation['id'] ?>">Adjuntos<?= (int) ($operation['attachment_count'] ?? 0) > 0 ? ' (' . (int) $operation['attachment_count'] . ')' : '' ?></a>

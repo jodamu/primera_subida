@@ -62,6 +62,29 @@ final class ReportService
             $params['household_id'] = (int) $householdValue;
         }
 
+        return [
+            'year' => (int) $yearValue,
+            'month' => (int) $monthValue,
+            'household_id' => $householdValue === null ? null : (int) $householdValue,
+        ] + $this->aggregatePeriod($scopeSql, $params);
+    }
+
+    public function totalsForSpacePeriod(array $space, string $start, string $end): array
+    {
+        $personal = $space['scope'] === 'personal';
+        $scopeSql = $personal
+            ? 'o.scope = "personal" AND o.owner_user_id = :personal_user_id'
+            : 'o.scope = "household" AND o.household_id = :household_id';
+        $params = ['month_start' => $start, 'month_end' => $end];
+        $params[$personal ? 'personal_user_id' : 'household_id'] = (int) (
+            $personal ? $space['owner_user_id'] : $space['household_id']
+        );
+
+        return $this->aggregatePeriod($scopeSql, $params);
+    }
+
+    private function aggregatePeriod(string $scopeSql, array $params): array
+    {
         $statement = $this->db->prepare(
             'WITH eligible AS (
                 SELECT o.id, o.operation_type, o.effective_date,
@@ -83,6 +106,7 @@ final class ReportService
                     SELECT operation_id, SUM(amount) AS debt_amount,
                            SUM(interest_amount) AS interest_amount
                     FROM liability_movements
+                    WHERE liability_id IN (SELECT id FROM liabilities WHERE currency = "COP")
                     GROUP BY operation_id
                 ) debt ON debt.operation_id = o.id
                 LEFT JOIN categories c ON c.id = COALESCE(o.category_id, original.category_id)
@@ -135,9 +159,6 @@ final class ReportService
         $rows = $statement->fetchAll();
 
         return [
-            'year' => (int) $yearValue,
-            'month' => (int) $monthValue,
-            'household_id' => $householdValue === null ? null : (int) $householdValue,
             'income_total' => $rows ? (string) $rows[0]['income_total'] : '0.00',
             'expense_total' => $rows ? (string) $rows[0]['expense_total'] : '0.00',
             'net_total' => $rows ? (string) $rows[0]['net_total'] : '0.00',

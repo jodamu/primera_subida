@@ -1079,6 +1079,10 @@ try {
         $userId = authenticated_user_id();
         try {
             $file = $attachmentService->forDownload($userId, (int) filter_var($_GET['id'] ?? 0, FILTER_VALIDATE_INT));
+            $stream = fopen($file['path'], 'rb');
+            if ($stream === false) {
+                throw new DomainException('No pudimos abrir el adjunto.');
+            }
         } catch (DomainException $exception) {
             http_response_code(404);
             render_page('error', ['title' => 'Adjunto no disponible', 'message' => $exception->getMessage()]);
@@ -1087,11 +1091,14 @@ try {
         $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $file['name']) ?? 'adjunto';
         header('Content-Type: ' . $file['mime']);
         header('Content-Length: ' . $file['size']);
-        header('Content-Disposition: attachment; filename="' . $safeName . '"');
+        header('Content-Disposition: attachment; filename="' . $safeName . '"; filename*=UTF-8\'\'' . rawurlencode($file['name']));
         header('X-Content-Type-Options: nosniff');
         header('Cache-Control: private, no-store');
         header("Content-Security-Policy: default-src 'none'; sandbox");
-        readfile($file['path']);
+        if (fpassthru($stream) === false) {
+            error_log('[Mi Finanzas] No se pudo completar la descarga de un adjunto.');
+        }
+        fclose($stream);
         exit;
     }
 

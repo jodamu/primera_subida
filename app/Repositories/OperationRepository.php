@@ -261,16 +261,20 @@ final class OperationRepository
             'SELECT o.id, o.operation_type, o.status, o.scope, o.description,
                     o.effective_date, o.created_at, o.reversal_of_operation_id,
                     c.name AS category_name, summary.amount, summary.account_summary,
+                    summary.currency, summary.currency_count,
                     (SELECT COUNT(*) FROM operation_attachments att
                      WHERE att.operation_id = o.id AND att.deleted_at IS NULL) AS attachment_count
              FROM operations o
              INNER JOIN (
                 SELECT entries.operation_id,
                        MAX(entries.amount) AS amount,
+                       MIN(entries.currency) AS currency,
+                       COUNT(DISTINCT entries.currency) AS currency_count,
                        GROUP_CONCAT(entries.item_summary ORDER BY entries.sort_id SEPARATOR " · ") AS account_summary
                 FROM (
                     SELECT m.operation_id,
                            CAST(m.amount AS DECIMAL(15,2)) AS amount,
+                           a.currency AS currency,
                            CONCAT(a.name, " [", a.currency, "]", CASE WHEN m.direction = "outflow" THEN " (salida " ELSE " (entrada " END, FORMAT(m.amount, 2), ")") AS item_summary,
                            m.id AS sort_id
                     FROM movements m
@@ -278,8 +282,11 @@ final class OperationRepository
                     UNION ALL
                     SELECT lm.operation_id,
                            CAST(lm.amount + lm.interest_amount AS DECIMAL(15,2)) AS amount,
+                           l.currency AS currency,
                            CONCAT(
                                l.name,
+                               " [", l.currency, "] ",
+                               FORMAT(lm.amount + lm.interest_amount, 2),
                                CASE WHEN lm.direction = "increase" THEN " (deuda +)" ELSE " (abono)" END
                            ) AS item_summary,
                            lm.id AS sort_id

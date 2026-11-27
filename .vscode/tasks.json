@@ -12,6 +12,13 @@
 			],
 			"isBackground": false,
 			"problemMatcher": []
+		},
+		{
+			"label": "Comprobar diff Fase 8",
+			"type": "shell",
+			"command": "git --no-pager diff --check",
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }
